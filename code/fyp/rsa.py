@@ -553,14 +553,6 @@ def is_enabled(model: nn.Module) -> bool:
     return any(isinstance(b.attn, RSAAttention) for b in _blocks(model))
 
 
-def installed_config(model: nn.Module) -> RSAConfig | None:
-    """The config on the first RSA layer, or None if RSA is not installed."""
-    for b in _blocks(model):
-        if isinstance(b.attn, RSAAttention):
-            return b.attn.cfg
-    return None
-
-
 def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool = True) -> dict:
     """Check the installed defense against the properties it is specified to have.
 

@@ -45,22 +45,6 @@ def patch_token_indices(
     return [off + r * grid + c for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)]
 
 
-def token_grid_position(token: int, grid: int = config.GRID, include_cls_offset: bool = True) -> tuple[int, int]:
-    """Inverse of the above for a single token -> (row, col) in the token grid.
-
-    Raises ValueError for a token that has no grid position: CLS under
-    `include_cls_offset`, and any index outside the `grid * grid` image tokens.
-    """
-    j = token - (1 if include_cls_offset else 0)
-    if not 0 <= j < grid * grid:
-        which = "CLS" if include_cls_offset and token == config.CLS_INDEX else "out of range"
-        raise ValueError(
-            f"token {token} has no grid position ({which}); image tokens are "
-            f"{1 if include_cls_offset else 0}..{grid * grid - (0 if include_cls_offset else 1)}"
-        )
-    return divmod(j, grid)
-
-
 def _key_sets(
     n_tokens: int,
     patch_tokens: Sequence[int],
@@ -97,11 +81,6 @@ def attention_entropy(weights: torch.Tensor, reduce: str = "mean") -> torch.Tens
     if reduce == "cls":
         return h[:, :, config.CLS_INDEX].mean(1)     # (B,)
     return h.mean(dim=(1, 2))                        # (B,)
-
-
-def max_entropy(n_tokens: int = config.N_TOKENS) -> float:
-    """log N - the entropy of uniform attention."""
-    return math.log(n_tokens)
 
 
 # --------------------------------------------------------------------------
