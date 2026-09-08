@@ -1,0 +1,145 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-29T06:46:16+00:00",
+    "git_commit": "b3606fd",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "purpose": "validate attacks.patch_autopgd has never been run; pass = at least as strong as patch_pgd at equal steps",
+  "rerun_note": "re-run 29 Aug after the review fixes: _check_oscillation restored to the fra31 first-checkpoint window, reduced_last initialised to ones, robust accuracy scored with robust_correct so a clean error is never robust",
+  "patch": {
+    "top": 96,
+    "left": 96,
+    "size_px": 32
+  },
+  "n_images": 32,
+  "clean_acc_pct": 96.875,
+  "runs": {
+    "patch_pgd_20": {
+      "clean_acc": 96.875,
+      "robust_acc": 31.25,
+      "asr": 67.74193548387096,
+      "n": 32,
+      "seconds": 3.6,
+      "peak_gb": 2.49
+    },
+    "patch_autopgd_dlr_20": {
+      "clean_acc": 96.875,
+      "robust_acc": 12.5,
+      "asr": 87.09677419354838,
+      "n": 32,
+      "seconds": 3.9,
+      "peak_gb": 2.61
+    },
+    "patch_autopgd_ce_20": {
+      "clean_acc": 96.875,
+      "robust_acc": 3.125,
+      "asr": 96.7741935483871,
+      "n": 32,
+      "seconds": 4.0,
+      "peak_gb": 2.61
+    },
+    "patch_autopgd_dlr_boundary_20": {
+      "clean_acc": 96.875,
+      "robust_acc": 9.375,
+      "asr": 90.3225806451613,
+      "n": 32,
+      "seconds": 4.1,
+      "peak_gb": 2.63
+    },
+    "patch_pgd_100": {
+      "clean_acc": 96.875,
+      "robust_acc": 15.625,
+      "asr": 83.87096774193549,
+      "n": 32,
+      "seconds": 17.8,
+      "peak_gb": 2.49
+    },
+    "patch_autopgd_dlr_100": {
+      "clean_acc": 96.875,
+      "robust_acc": 0.0,
+      "asr": 100.0,
+      "n": 32,
+      "seconds": 18.5,
+      "peak_gb": 2.61
+    },
+    "patch_autopgd_ce_100": {
+      "clean_acc": 96.875,
+      "robust_acc": 0.0,
+      "asr": 100.0,
+      "n": 32,
+      "seconds": 18.6,
+      "peak_gb": 2.61
+    },
+    "patch_autopgd_dlr_boundary_100": {
+      "clean_acc": 96.875,
+      "robust_acc": 0.0,
+      "asr": 100.0,
+      "n": 32,
+      "seconds": 18.6,
+      "peak_gb": 2.63
+    }
+  },
+  "verdicts": {
+    "patch_autopgd_dlr_20": {
+      "robust_acc": 12.5,
+      "patch_pgd_robust_acc": 31.25,
+      "at_least_as_strong": true
+    },
+    "patch_autopgd_ce_20": {
+      "robust_acc": 3.125,
+      "patch_pgd_robust_acc": 31.25,
+      "at_least_as_strong": true
+    },
+    "patch_autopgd_dlr_boundary_20": {
+      "robust_acc": 9.375,
+      "patch_pgd_robust_acc": 31.25,
+      "at_least_as_strong": true
+    },
+    "patch_autopgd_dlr_100": {
+      "robust_acc": 0.0,
+      "patch_pgd_robust_acc": 15.625,
+      "at_least_as_strong": true
+    },
+    "patch_autopgd_ce_100": {
+      "robust_acc": 0.0,
+      "patch_pgd_robust_acc": 15.625,
+      "at_least_as_strong": true
+    },
+    "patch_autopgd_dlr_boundary_100": {
+      "robust_acc": 0.0,
+      "patch_pgd_robust_acc": 15.625,
+      "at_least_as_strong": true
+    }
+  },
+  "headline_pass": true,
+  "model_info": {
+    "model_name": "deit_small_patch16_224",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "depth": 12,
+    "num_heads": 6,
+    "head_dim": 64,
+    "scale": 0.125,
+    "embed_dim": 384,
+    "num_classes": 100,
+    "n_params_m": 21.7,
+    "fused_attn_disabled": 12,
+    "device": "cuda"
+  }
+}

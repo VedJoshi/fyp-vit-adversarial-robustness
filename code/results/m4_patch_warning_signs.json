@@ -1,0 +1,57 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-29T07:16:47+00:00",
+    "git_commit": "776b29b",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "n_images": 256,
+  "attack": "patch_autopgd",
+  "attack_steps": 100,
+  "patch_px": 10,
+  "clean_acc": 94.53125,
+  "signs": {
+    "1_one_step_vs_iterative": {
+      "one_step_robust_acc": 93.359375,
+      "iterative_robust_acc": 71.09375,
+      "pass": true
+    },
+    "2_blackbox_vs_whitebox": {
+      "pass": null,
+      "note": "not implemented - needs a surrogate model and a defense to transfer to"
+    },
+    "3_unbounded_attack": {
+      "patch_px": 224,
+      "robust_acc": 0.0,
+      "pass": true
+    },
+    "4_random_vs_gradient": {
+      "random_search_error": 1.171875,
+      "attack_error": 23.4375,
+      "n_random_draws": 32,
+      "pass": true
+    },
+    "5_monotone_in_budget": {
+      "robust_acc_by_size": {
+        "10px": 71.09,
+        "20px": 23.05,
+        "30px": 0.0,
+        "40px": 0.0,
+        "50px": 0.0
+      },
+      "pass": true
+    }
+  },
+  "all_pass": true,
+  "untested": [
+    "2_blackbox_vs_whitebox"
+  ],
+  "minutes": 15.13
+}

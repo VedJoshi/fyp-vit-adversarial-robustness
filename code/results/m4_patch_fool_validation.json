@@ -1,0 +1,115 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-29T10:23:57+00:00",
+    "git_commit": "a50d24b",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "runs": {
+    "autopgd_fixed": {
+      "clean_acc": 87.5,
+      "robust_acc": 9.375,
+      "asr": 89.28571428571429,
+      "n": 32,
+      "minutes": 0.31,
+      "steps": 100
+    },
+    "fool_fixed": {
+      "clean_acc": 87.5,
+      "robust_acc": 3.125,
+      "asr": 96.42857142857143,
+      "n": 32,
+      "minutes": 1.6,
+      "steps": 250
+    },
+    "fool_selected": {
+      "clean_acc": 87.5,
+      "robust_acc": 0.0,
+      "asr": 100.0,
+      "n": 32,
+      "minutes": 1.65,
+      "steps": 250,
+      "tokens": [
+        9,
+        3,
+        105,
+        142,
+        195,
+        151,
+        143,
+        13,
+        130,
+        7,
+        104,
+        129,
+        35,
+        95,
+        156,
+        183,
+        42,
+        13,
+        154,
+        71,
+        60,
+        140,
+        14,
+        2,
+        140,
+        163,
+        72,
+        147,
+        57,
+        168,
+        65,
+        50
+      ],
+      "distinct_tokens": 30
+    }
+  },
+  "helper_checks": {
+    "mask_bounds": [
+      96,
+      111,
+      96,
+      111
+    ],
+    "pcgrad_unit_norm_forms_agree": true,
+    "pcgrad_residual_reference": 2.0,
+    "pcgrad_residual_normalised": 0.0
+  },
+  "leak_outside_patch": 0.0,
+  "fixed_token": 90,
+  "patch_px": 16,
+  "pass_at_least_as_strong_as_autopgd": true,
+  "reference": "GATECH-EIC/Patch-Fool, checked 29 Aug 2026",
+  "model_info": {
+    "model_name": "deit_small_patch16_224",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "depth": 12,
+    "num_heads": 6,
+    "head_dim": 64,
+    "scale": 0.125,
+    "embed_dim": 384,
+    "num_classes": 100,
+    "n_params_m": 21.7,
+    "fused_attn_disabled": 12,
+    "device": "cuda"
+  },
+  "invocation": "scripts/validate_patch_fool.py"
+}

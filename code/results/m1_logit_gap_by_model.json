@@ -1,0 +1,329 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-29T06:43:53+00:00",
+    "git_commit": "b3606fd",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "invocation": "python scripts/logit_gap_by_model.py --batch 64 --models deit_small_patch16_224 vit_base_patch16_224",
+  "n_images": 64,
+  "n_classes_covered": 52,
+  "n_classes_available": 100,
+  "sample": "data.eval_subset(ds, n_images) - a seeded draw of exactly the measured size, not the front of a larger subset",
+  "underflow_threshold": 103.0,
+  "underflow_events": {
+    "complete": "top1 - top2 > threshold: every non-maximal entry is exactly 0",
+    "partial": "top1 - min > threshold: the smallest entry is exactly 0"
+  },
+  "jain_dutta_fig2_vit_b16": {
+    "block_1": [
+      0,
+      45
+    ],
+    "block_6": [
+      0,
+      200
+    ],
+    "block_12": [
+      0,
+      1000
+    ]
+  },
+  "models": {
+    "deit_small_patch16_224": {
+      "model": "deit_small_patch16_224",
+      "checkpoint_tag": "fb_in1k",
+      "checkpoint_hf_id": "timm/deit_small_patch16_224.fb_in1k",
+      "depth": 12,
+      "num_heads": 6,
+      "head_dim": 64,
+      "scale": 0.125,
+      "layers": [
+        {
+          "layer": 0,
+          "median": 1.4453821182250977,
+          "p99": 7.227383613586426,
+          "max": 11.194829940795898,
+          "underflow_pct": 0.0,
+          "span_median": 11.232114791870117,
+          "span_max": 27.344039916992188,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 1,
+          "median": 0.9614899158477783,
+          "p99": 4.935157775878906,
+          "max": 7.525527000427246,
+          "underflow_pct": 0.0,
+          "span_median": 12.261781692504883,
+          "span_max": 66.01271057128906,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 2,
+          "median": 0.7326698303222656,
+          "p99": 3.096686363220215,
+          "max": 5.953614234924316,
+          "underflow_pct": 0.0,
+          "span_median": 12.138748168945312,
+          "span_max": 29.924467086791992,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 3,
+          "median": 0.45766735076904297,
+          "p99": 2.798168420791626,
+          "max": 5.410650253295898,
+          "underflow_pct": 0.0,
+          "span_median": 8.453380584716797,
+          "span_max": 18.372770309448242,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 4,
+          "median": 0.4075736999511719,
+          "p99": 4.372891426086426,
+          "max": 10.667402267456055,
+          "underflow_pct": 0.0,
+          "span_median": 7.572151184082031,
+          "span_max": 24.065414428710938,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 5,
+          "median": 0.4604593515396118,
+          "p99": 4.181809425354004,
+          "max": 5.4223504066467285,
+          "underflow_pct": 0.0,
+          "span_median": 8.369014739990234,
+          "span_max": 22.75322151184082,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 6,
+          "median": 0.4007422924041748,
+          "p99": 4.612656116485596,
+          "max": 6.247501373291016,
+          "underflow_pct": 0.0,
+          "span_median": 8.496467590332031,
+          "span_max": 17.783100128173828,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 7,
+          "median": 0.398465633392334,
+          "p99": 2.6412124633789062,
+          "max": 4.381463527679443,
+          "underflow_pct": 0.0,
+          "span_median": 7.589849472045898,
+          "span_max": 17.02741241455078,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 8,
+          "median": 0.40358877182006836,
+          "p99": 2.754178047180176,
+          "max": 3.810605764389038,
+          "underflow_pct": 0.0,
+          "span_median": 7.375185966491699,
+          "span_max": 15.885640144348145,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 9,
+          "median": 0.4949619770050049,
+          "p99": 2.8135628700256348,
+          "max": 5.237400054931641,
+          "underflow_pct": 0.0,
+          "span_median": 6.801766395568848,
+          "span_max": 16.80270004272461,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 10,
+          "median": 0.8875141143798828,
+          "p99": 3.848792552947998,
+          "max": 5.430108547210693,
+          "underflow_pct": 0.0,
+          "span_median": 6.840152740478516,
+          "span_max": 13.156665802001953,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 11,
+          "median": 1.2149590253829956,
+          "p99": 3.6371991634368896,
+          "max": 4.823586463928223,
+          "underflow_pct": 0.0,
+          "span_median": 8.599810600280762,
+          "span_max": 16.490598678588867,
+          "partial_underflow_pct": 0.0
+        }
+      ],
+      "max_gap_any_layer": 11.194829940795898,
+      "max_underflow_pct_any_layer": 0.0,
+      "max_span_any_layer": 66.01271057128906,
+      "max_partial_underflow_pct_any_layer": 0.0,
+      "reaches_underflow_regime": false,
+      "reaches_partial_underflow_regime": false,
+      "gap_grows_with_depth": false,
+      "capture_verification": {
+        "softmax_max_abs_err": 0.0,
+        "rowsum_max_abs_err": 3.5762786865234375e-07,
+        "output_max_abs_err": 0.0
+      }
+    },
+    "vit_base_patch16_224": {
+      "model": "vit_base_patch16_224",
+      "checkpoint_tag": "augreg2_in21k_ft_in1k",
+      "checkpoint_hf_id": "timm/vit_base_patch16_224.augreg2_in21k_ft_in1k",
+      "depth": 12,
+      "num_heads": 12,
+      "head_dim": 64,
+      "scale": 0.125,
+      "layers": [
+        {
+          "layer": 0,
+          "median": 2.4409074783325195,
+          "p99": 9.753949165344238,
+          "max": 32.854820251464844,
+          "underflow_pct": 0.0,
+          "span_median": 10.750125885009766,
+          "span_max": 110.90776062011719,
+          "partial_underflow_pct": 0.00330477996612899
+        },
+        {
+          "layer": 1,
+          "median": 1.015859603881836,
+          "p99": 5.889697551727295,
+          "max": 9.22308349609375,
+          "underflow_pct": 0.0,
+          "span_median": 9.763381958007812,
+          "span_max": 67.43235778808594,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 2,
+          "median": 0.9608893394470215,
+          "p99": 4.656582355499268,
+          "max": 9.028658866882324,
+          "underflow_pct": 0.0,
+          "span_median": 10.936416625976562,
+          "span_max": 46.51184844970703,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 3,
+          "median": 0.8091926574707031,
+          "p99": 6.012707710266113,
+          "max": 12.969687461853027,
+          "underflow_pct": 0.0,
+          "span_median": 9.928595542907715,
+          "span_max": 43.00419998168945,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 4,
+          "median": 0.5683233737945557,
+          "p99": 4.119336128234863,
+          "max": 8.423471450805664,
+          "underflow_pct": 0.0,
+          "span_median": 9.514060020446777,
+          "span_max": 22.92420768737793,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 5,
+          "median": 0.3965015411376953,
+          "p99": 2.921694040298462,
+          "max": 10.257336616516113,
+          "underflow_pct": 0.0,
+          "span_median": 9.142732620239258,
+          "span_max": 20.134639739990234,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 6,
+          "median": 0.30440378189086914,
+          "p99": 3.047041654586792,
+          "max": 7.9577956199646,
+          "underflow_pct": 0.0,
+          "span_median": 8.034883499145508,
+          "span_max": 21.504314422607422,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 7,
+          "median": 0.2802600860595703,
+          "p99": 3.107919454574585,
+          "max": 7.924426078796387,
+          "underflow_pct": 0.0,
+          "span_median": 9.270322799682617,
+          "span_max": 20.72177505493164,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 8,
+          "median": 0.2949986457824707,
+          "p99": 1.661643385887146,
+          "max": 4.614192008972168,
+          "underflow_pct": 0.0,
+          "span_median": 9.855570793151855,
+          "span_max": 18.474000930786133,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 9,
+          "median": 0.30951499938964844,
+          "p99": 1.622868537902832,
+          "max": 7.42215633392334,
+          "underflow_pct": 0.0,
+          "span_median": 9.751609802246094,
+          "span_max": 20.878206253051758,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 10,
+          "median": 0.3149648904800415,
+          "p99": 1.7824981212615967,
+          "max": 7.352837562561035,
+          "underflow_pct": 0.0,
+          "span_median": 10.744338989257812,
+          "span_max": 23.021987915039062,
+          "partial_underflow_pct": 0.0
+        },
+        {
+          "layer": 11,
+          "median": 0.20116138458251953,
+          "p99": 1.1236293315887451,
+          "max": 3.801149606704712,
+          "underflow_pct": 0.0,
+          "span_median": 9.420238494873047,
+          "span_max": 20.404598236083984,
+          "partial_underflow_pct": 0.0
+        }
+      ],
+      "max_gap_any_layer": 32.854820251464844,
+      "max_underflow_pct_any_layer": 0.0,
+      "max_span_any_layer": 110.90776062011719,
+      "max_partial_underflow_pct_any_layer": 0.00330477996612899,
+      "reaches_underflow_regime": false,
+      "reaches_partial_underflow_regime": true,
+      "gap_grows_with_depth": false,
+      "capture_verification": {
+        "softmax_max_abs_err": 0.0,
+        "rowsum_max_abs_err": 4.172325134277344e-07,
+        "output_max_abs_err": 0.0
+      }
+    }
+  },
+  "any_model_reaches_underflow": false,
+  "any_model_reaches_partial_underflow": true
+}

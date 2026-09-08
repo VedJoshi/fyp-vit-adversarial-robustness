@@ -1,0 +1,67 @@
+# This working tree is an Obsidian vault; the GitHub repo is only the code.
+#
+# The rule is an allowlist: everything at the root is ignored, and the few paths
+# below are added back. A deny-list would need editing every time a draft, a
+# result dump or a set of notes lands in the vault, and forgetting once publishes
+# it. This way anything new is private until it is named here.
+#
+# Tracked: the code, the bibliography, and the two files that describe them.
+# Untracked: the vault (papers, pdfs, reading notes, topics), the planning and
+# handoff documents, thesis drafts, diagnostic write-ups, cluster output and
+# every PDF.
+
+/*
+
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/refs.bib
+!/code/
+
+# Inside code/, the same split as before: source and run records are tracked,
+# downloaded data and generated figures are not.
+
+# Downloaded datasets. `/*` not `/`: a trailing slash excludes the directory and
+# git does not descend into it, so the negation below would never match.
+code/data/*
+!code/data/imagenet100_wnids_*.json
+
+# Run records are tracked; figures are not.
+code/results/*
+!code/results/*.json
+
+# The reproduction sweeps are withheld until the model and class-subset control
+# closes. Last match wins in this file, so these lines must stay below the
+# allowlist above. The files exist locally; restore them by deleting this block.
+code/results/gate_a_*.json
+code/results/table2_by_rule.json
+code/results/pilot20full_analysis.json
+code/results/shards/
+
+# Model weights and experiment scratch.
+checkpoints/
+runs/
+wandb/
+outputs/
+*.pth
+*.pt
+*.ckpt
+*.npy
+*.npz
+
+# Python.
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# PDFs are never tracked. They are immutable downloads git cannot diff, and the
+# paper set is reconstructible from refs.bib.
+*.pdf
+
+# OS cruft.
+Thumbs.db
+desktop.ini
+.DS_Store

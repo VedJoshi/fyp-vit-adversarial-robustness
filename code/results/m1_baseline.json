@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-28T02:52:26+00:00",
+    "git_commit": "41c54a6",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "clean_acc_pct": 92.96875,
+  "correct": 476,
+  "n_images": 512,
+  "rsa_reference_clean_acc_pct": 93.16,
+  "n_classes": 100,
+  "model_info": {
+    "model_name": "deit_small_patch16_224",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "depth": 12,
+    "num_heads": 6,
+    "head_dim": 64,
+    "scale": 0.125,
+    "embed_dim": 384,
+    "num_classes": 100,
+    "n_params_m": 21.7,
+    "fused_attn_disabled": 12,
+    "device": "cuda"
+  },
+  "patch_demo": {
+    "top": 96,
+    "left": 96,
+    "size_px": 32,
+    "n_tokens_covered": 4,
+    "rsa_window_tokens": 3
+  }
+}

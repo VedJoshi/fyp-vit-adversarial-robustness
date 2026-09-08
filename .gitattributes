@@ -1,0 +1,16 @@
+# Keep LF endings everywhere. The notes are written by Obsidian and by scripts that
+# emit LF; letting Windows git rewrite them to CRLF on checkout would show every file
+# as modified after a clone and make diffs useless.
+*.md      text eol=lf
+*.txt     text eol=lf
+*.json    text eol=lf
+*.py      text eol=lf
+*.ipynb   text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# Binaries — never touch these
+*.pdf     binary
+*.docx    binary
+*.png     binary
+*.jpg     binary

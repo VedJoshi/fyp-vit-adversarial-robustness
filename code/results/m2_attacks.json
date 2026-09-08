@@ -1,0 +1,101 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-29T07:01:33+00:00",
+    "git_commit": "b3606fd",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "eps": 0.03137254901960784,
+  "attacks": {
+    "fgsm": {
+      "clean_acc": 96.88,
+      "robust_acc": 71.88,
+      "asr": 25.81,
+      "n": 32.0
+    },
+    "pgd20_x2": {
+      "clean_acc": 96.88,
+      "robust_acc": 0.0,
+      "asr": 100.0,
+      "n": 32.0
+    },
+    "patch_pgd_32px_fixed_loc": {
+      "clean_acc": 96.88,
+      "robust_acc": 43.75,
+      "asr": 54.84,
+      "n": 32.0
+    },
+    "patch_pgd_32px_worst_of_9_locs": {
+      "clean_acc": 96.88,
+      "robust_acc": 12.5,
+      "asr": 87.1,
+      "n": 32.0
+    }
+  },
+  "athalye_warning_signs": {
+    "n_images": 256,
+    "attack_steps": 100,
+    "eps": 0.03137254901960784,
+    "clean_acc": 94.53125,
+    "signs": {
+      "1_one_step_vs_iterative": {
+        "fgsm_robust_acc": 52.34375,
+        "pgd_robust_acc": 0.0,
+        "pass": true
+      },
+      "2_blackbox_vs_whitebox": {
+        "pass": null,
+        "note": "not implemented - needs a surrogate model and a defense to transfer to"
+      },
+      "3_unbounded_attack": {
+        "eps": 1.0,
+        "robust_acc": 0.0,
+        "pass": true
+      },
+      "4_random_vs_gradient": {
+        "random_search_error": 1.953125,
+        "pgd_error": 94.53125,
+        "n_random_draws": 32,
+        "pass": true
+      },
+      "5_monotone_in_budget": {
+        "robust_acc_by_eps": {
+          "1/255": 16.41,
+          "2/255": 0.0,
+          "4/255": 0.0,
+          "8/255": 0.0,
+          "16/255": 0.0
+        },
+        "pass": true
+      }
+    },
+    "all_pass": true,
+    "untested": [
+      "2_blackbox_vs_whitebox"
+    ],
+    "minutes": 14.86,
+    "rerun_note": "re-run 29 Aug: signs scored with robust_correct, sign 4 compares clean_acc - pgd_acc against a random-search error over the same conditioning, signs 1 and 5 reject a plateau"
+  },
+  "location_grid": {
+    "10px": 121,
+    "20px": 121,
+    "30px": 100,
+    "40px": 100,
+    "50px": 81
+  },
+  "location_grid_rsa_reference": {
+    "10px": 121,
+    "20px": 121,
+    "30px": 100,
+    "40px": 100,
+    "50px": 81
+  },
+  "patch_sweep_note": "worst-location used 9 of 100 grid positions and 20-step patch-PGD; RSA uses the full grid with 100-step PatchAutoPGD"
+}

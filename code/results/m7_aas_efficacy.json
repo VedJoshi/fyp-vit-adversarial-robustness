@@ -1,0 +1,102 @@
+{
+  "_meta": {
+    "written_utc": "2026-08-29T16:37:05+00:00",
+    "git_commit": "3c88ba7",
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true
+  },
+  "question": "does pre-softmax attention scaling beat standard PatchAutoPGD on this checkpoint; implements Jain & Dutta's `+Scale` baseline, not Algorithm 1",
+  "implements": "shared-lambda +Scale baseline",
+  "not_implemented": "full AAS Algorithm 1: per-block factors learned by 10 steps of LPIPS ascent, clamped to [1e-7, 1]; adds ~0.51 points over +Scale by their Table 3",
+  "clean_acc_untouched": 91.796875,
+  "clean_acc_scaled_by_variant": {
+    "unscaled": 91.796875,
+    "lambda=0.0001": 5.46875,
+    "lambda=0.001": 5.46875,
+    "lambda=0.01": 5.46875,
+    "lambda=0.1": 15.234375,
+    "lambda=1": 91.796875,
+    "lambda=10": 20.703125
+  },
+  "robust_acc_on_scaled_model": {
+    "unscaled": 15.625,
+    "lambda=0.0001": 3.90625,
+    "lambda=0.001": 3.90625,
+    "lambda=0.01": 3.90625,
+    "lambda=0.1": 8.59375,
+    "lambda=1": 15.625,
+    "lambda=10": 0.0
+  },
+  "robust_acc_on_untouched_model": {
+    "unscaled": 15.625,
+    "lambda=0.0001": 91.40625,
+    "lambda=0.001": 91.40625,
+    "lambda=0.01": 91.40625,
+    "lambda=0.1": 91.796875,
+    "lambda=1": 15.625,
+    "lambda=10": 91.796875
+  },
+  "baseline_unscaled": 15.625,
+  "best_scaled_variant": "lambda=0.0001",
+  "gain_points_vs_unscaled": -75.78125,
+  "max_clean_accuracy_drop_from_scaling": 86.328125,
+  "verdict": "scaling weakens the attack here - rung L2 comes off on efficacy as well as mechanism",
+  "identity_check_max_abs_diff": 0.0,
+  "reference_table1_cifar10_pgd100": {
+    "1": 61.1,
+    "1e-4": 60.23,
+    "1e-3": 60.14,
+    "1e-2": 59.43,
+    "1e-1": 60.87,
+    "10": 66.78
+  },
+  "lambdas": [
+    0.0001,
+    0.001,
+    0.01,
+    0.1,
+    1.0,
+    10.0
+  ],
+  "patch_px": 16,
+  "patch_token": 90,
+  "patch_top_left": [
+    96,
+    96
+  ],
+  "steps": 100,
+  "n_images": 256,
+  "headroom_note": "16 px at this location leaves the unscaled attack well above 0%, so an improvement is detectable; a 32 px patch saturates at 0.00% and would make the comparison vacuous",
+  "mechanism_note": "measurement 1 found peak logit gap 11.19 on DeiT-S against the ~103 underflow threshold, so the saturation the technique exists to relieve is absent; this measures efficacy regardless",
+  "minutes": 17.28,
+  "model_info": {
+    "model_name": "deit_small_patch16_224",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "depth": 12,
+    "num_heads": 6,
+    "head_dim": 64,
+    "scale": 0.125,
+    "embed_dim": 384,
+    "num_classes": 100,
+    "n_params_m": 21.7,
+    "fused_attn_disabled": 12,
+    "device": "cuda"
+  },
+  "invocation": "scripts/aas_efficacy.py"
+}
