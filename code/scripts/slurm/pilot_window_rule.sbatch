@@ -33,8 +33,25 @@
 # task redoes one location, not the run. A resume MUST reuse the same --n-images and
 # --steps, since the recorded indices are into the evaluation batch order.
 #
-# OUTPUT. Six files, code/results/gate_a_pilot20full_<rule>.json.
+# OUTPUT. Six files, code/results/gate_a_pilot20fullb_<rule>.json. The 'b' is the
+# resampled rerun; the original pilot20full files are the 12-class run, kept for the
+# record. Analyse with: python scripts/pilot_analysis.py --tag pilot20fullb
 
+#
+# RERUN REQUIRED, 8 September 2026 — the sample was wrong.
+#
+# This job passes --n-images 64. Until 8 September gate_a.py drew 512 indices, sorted
+# them, and took the first 64. eval_subset sorts, and ImageFolder orders by class
+# directory, so "the first 64" was the 64 lowest indices: classes 0-11 only. Twelve of
+# a hundred classes. A correct 64-draw spans 52. gate_a.py now calls
+# eval_subset(ds, args.n_images) and draws at the size it measures, so re-submitting
+# this file unchanged picks up the fix.
+#
+# CHANGE THE TAG, or delete the old progress files first. The recorded results are in
+# ../cluster results/results/gate_a_{TAG}_*.progress.jsonl and they carry no protocol
+# header, so gate_a.py will refuse to resume onto them rather than pool two samples
+# into one union. That refusal is correct; the fix is a new tag, not a workaround.
+#
 #SBATCH --job-name=fyp-pilot-wr
 # Partition is left to the environment: export SBATCH_PARTITION for your site.
 #SBATCH --time=0-06:00:00
@@ -91,6 +108,6 @@ srun python code/scripts/gate_a.py \
     --window-rule "$RULE" \
     --renorm zero \
     --score-frame per-head \
-    --tag "pilot20full_${RULE}"
+    --tag "pilot20fullb_${RULE}"
 
 echo "done: $(date)"

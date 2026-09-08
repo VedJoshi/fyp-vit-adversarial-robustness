@@ -60,9 +60,16 @@ fi
 . "$VENV/bin/activate"
 python -m pip install --upgrade pip
 
-# There is no requirements.txt in this repo. The third-party imports across
-# code/fyp/ and code/scripts/ are exactly: torch, torchvision, timm, numpy.
-# matplotlib is used only by the notebooks; jupyterlab is not needed on the cluster.
+# code/requirements.txt carries the same set and the reasoning; this stays the
+# authority on the cluster because of the index-url and retry handling below.
+# The third-party imports across code/fyp/ and code/scripts/ are exactly: torch,
+# torchvision, timm, numpy. matplotlib is used only by the notebooks; jupyterlab
+# is not needed on the cluster.
+#
+# numpy is still installed unpinned. It is a real gap: data.rsa_class_wnids
+# reproduces the authors' class draw through np.random.seed(0), and no record
+# written before 8 September 2026 carries the numpy version it ran under. Pin it
+# from `pip freeze` the next time this environment is rebuilt.
 #
 # Versions are PINNED to code/README.md's "Verified on ... torch 2.7.0+cu118,
 # timm 1.0.15" line, on purpose. An unpinned `pip install timm` grabbed 1.0.29

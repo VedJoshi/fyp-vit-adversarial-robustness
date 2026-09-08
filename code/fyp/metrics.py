@@ -46,8 +46,18 @@ def patch_token_indices(
 
 
 def token_grid_position(token: int, grid: int = config.GRID, include_cls_offset: bool = True) -> tuple[int, int]:
-    """Inverse of the above for a single token -> (row, col) in the token grid."""
+    """Inverse of the above for a single token -> (row, col) in the token grid.
+
+    Raises ValueError for a token that has no grid position: CLS under
+    `include_cls_offset`, and any index outside the `grid * grid` image tokens.
+    """
     j = token - (1 if include_cls_offset else 0)
+    if not 0 <= j < grid * grid:
+        which = "CLS" if include_cls_offset and token == config.CLS_INDEX else "out of range"
+        raise ValueError(
+            f"token {token} has no grid position ({which}); image tokens are "
+            f"{1 if include_cls_offset else 0}..{grid * grid - (0 if include_cls_offset else 1)}"
+        )
     return divmod(j, grid)
 
 
@@ -172,11 +182,18 @@ def patch_attention_mass(
 # --------------------------------------------------------------------------
 # Logit gaps
 # --------------------------------------------------------------------------
-#: Below this, exp(-gap) is 0 in float32 (smallest subnormal ~1.4e-45 = e^-103),
-#: so every non-maximal softmax entry underflows to exactly zero and the attention
-#: row becomes exactly one-hot with exactly zero gradient. Jain & Dutta (CVPR 2024)
-#: report gaps of 250-1000 by block 12 of a trained ViT-B/16.
-FLOAT32_UNDERFLOW_GAP = 103.0
+#: Past this gap, exp(-gap) is exactly 0 in float32, so every non-maximal softmax entry
+#: underflows and the attention row becomes exactly one-hot with exactly zero gradient.
+#: Jain & Dutta (CVPR 2024) report gaps of 250-1000 by block 12 of a trained ViT-B/16.
+#:
+#: The value is where exp(-gap) falls below half the smallest positive subnormal and
+#: rounds to zero, `-log(2^-150) = 150 * log 2 = 103.972`. At gap = 103 the result is
+#: still the smallest subnormal 1.4e-45, not zero; a threshold of 103 therefore labels
+#: rows in (103, 103.972] as underflowed while their smallest probability is nonzero.
+#: This is a derivation from the float32 format, not a number Jain & Dutta state. The
+#: measured boundary of `torch.exp` on the pinned build (torch 2.7.0) is 103.9720802,
+#: 3e-6 above the format value, so the constant is conservative to that precision.
+FLOAT32_UNDERFLOW_GAP = 150.0 * math.log(2.0)          # 103.97208...
 
 
 def logit_gap(logits: torch.Tensor, reduce: str = "max") -> torch.Tensor:
@@ -276,14 +293,35 @@ def rsa_token_scores(
     `frame` picks which mean plays the part of `mu`; see `SCORE_FRAMES`. The norms are
     averaged across heads either way. Returns (B, N_img).
     """
+    vv = v[:, :, 1:, :] if exclude_cls else v        # (B, H, N_img, head_dim)
+    mu = score_frame_mean(v, exclude_cls=exclude_cls, frame=frame)
+    scores = (vv - mu).norm(dim=-1)                  # (B, H, N_img)
+    return scores.mean(1)                            # average over heads -> (B, N_img)
+
+
+def score_frame_mean(
+    v: torch.Tensor,
+    exclude_cls: bool = True,
+    frame: str = DEFAULT_SCORE_FRAME,
+) -> torch.Tensor:
+    """The `mu` that `rsa_token_scores` measures deviations against, under `frame`.
+
+    Broadcastable against `(B, H, N, head_dim)`: shape `(B, 1, 1, head_dim)` under
+    ``"global"`` and `(B, H, 1, head_dim)` under ``"per-head"``.
+
+    Anything that interprets what RSA charges a token for - `direction_decomposition`
+    and the mechanism scripts above all - has to centre on the same vector the ranking
+    used. Centring per head while the score is ranked globally measures a different
+    deviation: the two frames are not a constant apart, because under ``"global"`` each
+    head carries the offset `(mu^h - mu_bar)`.
+    """
     if frame not in SCORE_FRAMES:
         raise ValueError(f"unknown frame {frame!r}; pick from {SCORE_FRAMES}")
-    vv = v[:, :, 1:, :] if exclude_cls else v        # (B, H, N_img, head_dim)
+    vv = v[:, :, 1:, :] if exclude_cls else v
     mu = vv.mean(dim=2, keepdim=True)                # (B, H, 1, head_dim)
     if frame == "global":
         mu = mu.mean(dim=1, keepdim=True)            # (B, 1, 1, head_dim), all heads
-    scores = (vv - mu).norm(dim=-1)                  # (B, H, N_img)
-    return scores.mean(1)                            # average over heads -> (B, N_img)
+    return mu
 
 
 def rsa_window_scores(
@@ -329,6 +367,26 @@ def rsa_window_scores(
     return (total / covered).squeeze(1)
 
 
+def rsa_window_size_released(patch_px: int, patch_size: int = config.PATCH_SIZE) -> int:
+    """The window side the authors' released code computes, transcribed.
+
+    `pycls/models/vision_transformer.py:82-87` of wagner-group/robust-self-attention::
+
+        max_patches = adv_patch_size // vit_patch_size + 1
+        if adv_patch_size % vit_patch_size > 1:
+            max_patches += 1
+
+    This is not `ceil(p/16) + 1`. The two agree whenever `p % 16 != 1`, which covers
+    10, 20, 30, 40 and 50 px (both give 2, 3, 3, 4, 5), and differ at p = 1 (mod 16):
+    at 17 px the released formula gives 2 and `ceil+1` gives 3. No RSA patch size is in
+    that class, so the headline results are unaffected either way.
+    """
+    side = patch_px // patch_size + 1
+    if patch_px % patch_size > 1:
+        side += 1
+    return min(side, config.GRID)
+
+
 def rsa_window_size(
     patch_px: int,
     patch_size: int = config.PATCH_SIZE,
@@ -341,10 +399,14 @@ def rsa_window_size(
     RSA takes the patch size as a known hyperparameter; overestimating it costs clean
     accuracy (their Table 2: 93.16 at 0px down to 83.98 at 50px).
 
-    `rule` names which reading the side comes from. `ceil` is the tight side; every
-    other rule uses `ceil+1` and differs in the candidate set or the masking step
-    instead. See `rsa.WINDOW_RULES`.
+    `rule` names which reading the side comes from. `released` is the authors' own
+    formula (`rsa_window_size_released`), `ceil` is the tight side, and every other rule
+    uses `ceil+1` and differs in the candidate set or the masking step instead. See
+    `rsa.WINDOW_RULES`. `released` and `ceil+1` coincide at all five of RSA's patch
+    sizes and part company only when `patch_px % patch_size == 1`.
     """
+    if rule == "released":
+        return rsa_window_size_released(patch_px, patch_size)
     tight = math.ceil(patch_px / patch_size)
     side = tight if rule == "ceil" else tight + 1
     return min(side, config.GRID)

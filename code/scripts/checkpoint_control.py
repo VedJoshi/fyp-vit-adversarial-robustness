@@ -132,7 +132,13 @@ def main():
         wnids_expected = data.imagenet100_wnids()
         clf, info = None, None
 
-    ds, wnids, class_indices = data.build_dataset()
+    # Fatal for their checkpoint, a warning for ours. Their head is ordered by their
+    # seed-0 wnid list, so a different directory silently scores every image against the
+    # wrong class while clean accuracy stays plausible and the 5-point gate still passes.
+    # Ours is head-sliced from the directory itself, so a mismatch there is a comparison
+    # problem rather than a labelling one.
+    ds, wnids, class_indices = data.build_dataset(
+        expect_wnids=wnids_expected if args.model == "rsa" else None)
     if wnids != sorted(wnids_expected):
         print(f"\n  WARNING: the data on disk is not the class set this model expects.")
         print(f"  on disk : {wnids[:3]} ... ({len(wnids)} classes)")
@@ -143,10 +149,12 @@ def main():
     if args.model == "ours":
         clf, info = models.load_model(class_indices=class_indices, device=device)
 
-    sub = data.eval_subset(ds)
-    loader = data.make_loader(sub)
+    # Drawn at `--n-images`, not sliced from a 512-draw: sorted indices make a prefix
+    # the lowest order statistics of the sample. See `data.eval_subset`.
+    sub = data.eval_subset(ds, args.n_images)
+    loader = data.make_loader(sub, batch_size=args.n_images)
     x, y = next(iter(loader))
-    x, y = x[: args.n_images].to(device), y[: args.n_images].to(device)
+    x, y = x.to(device), y.to(device)
 
     clean_ok = attacks.accuracy(clf, x, y)
     clean_pct = 100 * clean_ok.float().mean().item()
@@ -192,7 +200,8 @@ def main():
         print("  full mask % : " + " ".join(f"{f:4.0f}" for f in g["full_mask_pct_by_layer"]))
         record["per_location"][f"{top},{left}"] = dict(g, alignment=alignment)
 
-    results.save(f"checkpoint_control_{tag}", record)
+    results.save(f"checkpoint_control_{tag}", record,
+                 n_eval_images=int(len(y)), attack_steps=args.steps)
     print("\nCompare the two runs' window-rank rows. If they agree, the checkpoint")
     print("cannot explain the Gate A gap and the five-size sweep is not worth running.")
 

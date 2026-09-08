@@ -47,6 +47,10 @@ def parse_args():
     p.add_argument("--n-images", type=int, default=config.SCALE.n_mechanism_images)
     p.add_argument("--steps", type=int, default=250, help="Patch-Fool iterations")
     p.add_argument("--layer", type=int, default=6, help="layer for measurement 3")
+    p.add_argument("--score-frame", default=metrics.DEFAULT_SCORE_FRAME,
+                   choices=metrics.SCORE_FRAMES,
+                   help="which mean the deviation is centred on; must match the frame "
+                        "RSA's score is ranked in for measurement 2 to be about RSA")
     p.add_argument("--no-save", action="store_true")
     return p.parse_args()
 
@@ -112,7 +116,11 @@ def main():
             rec = cap[L]
             v = rec.v.detach()
             u = -rec.grad("v")                    # not rec.v.grad; see LayerAttention.grad
-            mu = v[:, :, 1:, :].mean(dim=2, keepdim=True)
+            # The same mean the anomaly score ranks against, not the per-head mean.
+            # `delta` here stands in for "what RSA penalises", so it has to be centred
+            # in the score's frame; the two differ by the per-head offset and change
+            # both the norm and the direction. See `metrics.score_frame_mean`.
+            mu = metrics.score_frame_mean(v, frame=args.score_frame)
 
             d = metrics.direction_decomposition(gather_tokens(v, tok) - mu,
                                                 gather_tokens(u, tok))
@@ -132,7 +140,7 @@ def main():
                 clf(x)
             v_cl = cap[args.layer].v
 
-        mu_ad = v_ad[:, :, 1:, :].mean(dim=2, keepdim=True)
+        mu_ad = metrics.score_frame_mean(v_ad, frame=args.score_frame)
         delta = gather_tokens(v_ad, tok) - mu_ad
         rand = metrics.direction_decomposition(delta, torch.randn_like(delta))
         rand_sum += float(rand["aligned_fraction"].sum())
@@ -185,8 +193,12 @@ def main():
     ok = abs(rand_frac - baseline) < 0.01
     print(f"  random-direction control {rand_frac:.4f} against {baseline:.4f}  "
           f"{'OK' if ok else 'CHECK THIS'}")
-    print(f"  {100.0 * (1 - mean_aligned):.1f}% of what RSA penalises does no "
-          f"first-order harm")
+    print(f"  {100.0 * (1 - mean_aligned):.1f}% of the squared deviation energy RSA "
+          f"ranks on ({args.score_frame} frame) lies orthogonal to the local margin "
+          f"gradient at this layer")
+    print("  that is a first-order, single-layer, 16 px grid-aligned measurement; it "
+          "does not say the deviation is harmless, and does not transfer to RSA's "
+          "10-50 px arbitrarily-placed squares")
 
     print(f"\nMeasurement 3 - layer {args.layer}, {n_seen} images")
     c, a, o = vn_clean / vn_n, vn_adv / vn_n, vn_other / vn_n
@@ -210,6 +222,7 @@ def main():
         "robust_acc": 100.0 * n_robust / n_seen,
         "distinct_tokens": len(set(tokens_seen)),
         "measurement_2": {
+            "score_frame": args.score_frame,
             "aligned_fraction_by_layer": aligned,
             "mean_aligned_fraction": mean_aligned,
             "random_baseline": baseline,
@@ -236,7 +249,8 @@ def main():
         "invocation": " ".join(sys.argv),
     }
     if not args.no_save:
-        results.save("m6_mechanism_patch_fool", payload)
+        results.save("m6_mechanism_patch_fool", payload,
+                     n_eval_images=n_seen, attack_steps=args.steps)
 
 
 if __name__ == "__main__":

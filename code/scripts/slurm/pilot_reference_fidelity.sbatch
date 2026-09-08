@@ -56,8 +56,25 @@
 # the authors' code. That check cannot run on the login node: importing torch there hits
 # the virtual-memory cap.
 #
-# OUTPUT. Four files, code/results/gate_a_ref20_<frame>_<renorm>.json.
+# OUTPUT. Four files, code/results/gate_a_ref20b_<frame>_<renorm>.json. The 'b' is the
+# resampled rerun; the original ref20 files are the 12-class run, kept for the record.
+# Analyse with: python scripts/pilot_analysis.py --tag ref20b
 
+#
+# RERUN REQUIRED, 8 September 2026 — the sample was wrong.
+#
+# This job passes --n-images 64. Until 8 September gate_a.py drew 512 indices, sorted
+# them, and took the first 64. eval_subset sorts, and ImageFolder orders by class
+# directory, so "the first 64" was the 64 lowest indices: classes 0-11 only. Twelve of
+# a hundred classes. A correct 64-draw spans 52. gate_a.py now calls
+# eval_subset(ds, args.n_images) and draws at the size it measures, so re-submitting
+# this file unchanged picks up the fix.
+#
+# CHANGE THE TAG, or delete the old progress files first. The recorded results are in
+# ../cluster results/results/gate_a_{TAG}_*.progress.jsonl and they carry no protocol
+# header, so gate_a.py will refuse to resume onto them rather than pool two samples
+# into one union. That refusal is correct; the fix is a new tag, not a workaround.
+#
 #SBATCH --job-name=fyp-pilot-ref
 # Partition is left to the environment: export SBATCH_PARTITION for your site.
 #SBATCH --time=0-06:00:00
@@ -128,6 +145,6 @@ srun python code/scripts/gate_a.py \
     --window-rule "ceil+1" \
     --score-frame "$FRAME" \
     --renorm "$RENORM" \
-    --tag "ref20_${FRAME}_${RENORM}"
+    --tag "ref20b_${FRAME}_${RENORM}"
 
 echo "done: $(date)"

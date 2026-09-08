@@ -9,11 +9,23 @@ compares this harness's arithmetic against the code the authors ran.
 
 What it pins, at all five of RSA's patch sizes:
 
-* the window side, against `p // 16 + 1 (+1 if p % 16 > 1)` at their line 84;
+* the window side, against `p // 16 + 1 (+1 if p % 16 > 1)` at their line 84, for
+  `rule="released"` at every size from 1 to 64 and not only where `ceil+1` happens to
+  agree with it;
 * the anomaly score under `score_frame="global"`, against their lines 88-93, which
   centre every head on the head-averaged mean value vector;
 * the set of tokens the argmax masks, against their lines 94-107;
-* the replacement value and the masked key's attention weight, 1/197.
+* the replacement value and the masked key's attention weight, 1/197;
+* **the gradient.** Forward equality is not reproduction. Their line 101 scatters with
+  an index that names the same row 197 times, so autograd sends the output gradient to
+  all 197 repeated source elements, while `torch.where` sends it once. The two forward
+  tensors are bit-exact and the input gradients are not: on random tensors the cosine
+  is 0.21-0.45 and a third of the signs disagree. `patch_autopgd` takes `grad.sign()`,
+  so an attack differentiating the wrong one is not the authors' attack. The check
+  pins `backward="released"` against the literal scatter loop and asserts that
+  `backward="intended"` really does differ, so neither can silently become the other.
+
+It also runs `rsa.verify` on a small stub model, which had no caller before.
 
 Run it after any change to `rsa.RSAAttention` or `metrics.rsa_token_scores`. It needs
 no model weights and no dataset, so it runs anywhere in a couple of seconds.
@@ -80,6 +92,14 @@ class _StubAttn(nn.Module):
         self.head_dim = D
         self.scale = D ** -0.5
 
+    def forward(self, t):
+        """timm's explicit attention, so `rsa.verify` has an undefended model to match."""
+        b, n, c = t.shape
+        qkv = self.qkv(t).reshape(b, n, 3, H, D).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)
+        attn = self.attn_drop(((q * self.scale) @ k.transpose(-2, -1)).softmax(dim=-1))
+        return self.proj_drop(self.proj((attn @ v).transpose(1, 2).reshape(b, n, c)))
+
 
 failures = []
 
@@ -101,6 +121,16 @@ for size in (10, 20, 30, 40, 50):
     ref_w = size // 16 + 1 + (1 if size % 16 > 1 else 0)
     mine = metrics.rsa_window_size(size, rule="ceil+1")
     check(f"{size}px", ref_w == mine, f"ref {ref_w}, ceil+1 {mine}")
+
+print("\nwindow size, rule='released' against the reference formula, 1-64px")
+bad = [p for p in range(1, 65)
+       if metrics.rsa_window_size(p, rule="released")
+       != min(p // 16 + 1 + (1 if p % 16 > 1 else 0), config.GRID)]
+check("released matches at every size", not bad, f"differs at {bad}" if bad else "1..64")
+diverge = [p for p in range(1, 65)
+           if metrics.rsa_window_size(p, rule="released")
+           != metrics.rsa_window_size(p, rule="ceil+1")]
+check("ceil+1 differs only at p = 1 (mod 16)", diverge == [1, 17, 33, 49], str(diverge))
 
 print("\ntoken scores, frame='global' against reference lines 88-93")
 v = torch.randn(B, H, CTX, D)
@@ -152,6 +182,55 @@ check("masked attention column equals 1/197",
       torch.allclose(mine_w, ref_w, atol=1e-7),
       f"{(mine_w - ref_w).abs().max().item():.3e}")
 
+print("\nbackward pass against the reference scatter, per patch size")
+print("  the forward tensors match under both settings; only the gradient separates them")
+for size in (10, 20, 30, 40, 50):
+    v0 = torch.randn(B, H, CTX, D)
+    gout = torch.randn(B, H, CTX, D)
+
+    # Literal upstream: `v.scatter(-2, idx.repeat(1, H, context_length, D), v_mean)`,
+    # `v_mean` being the per-head mean repeated `context_length` times.
+    va = v0.clone().requires_grad_(True)
+    ref_v, _, _, _, _ = reference_trim(va, torch.rand(B, H, CTX, CTX), size)
+    (ref_v * gout).sum().backward()
+    g_ref = va.grad.clone()
+
+    grads, fwd = {}, {}
+    for mode in ("released", "intended"):
+        vb = v0.clone().requires_grad_(True)
+        cfg = rsa.RSAConfig.for_patch(size, window_rule="released", backward=mode)
+        module = rsa.RSAAttention(_StubAttn(), cfg)
+        mask = module.select(vb)
+        mu = vb[:, :, 1:, :].mean(dim=2, keepdim=True)
+        if mode == "released":
+            mu = rsa._ScaleGrad.apply(mu, float(config.N_TOKENS))
+        out = torch.where(mask[:, None, :, None], mu.expand_as(vb), vb)
+        (out * gout).sum().backward()
+        grads[mode] = vb.grad.clone()
+        fwd[mode] = out.detach()
+
+    check(f"{size}px forward, released == reference",
+          torch.equal(fwd["released"], ref_v.detach()),
+          f"{(fwd['released'] - ref_v.detach()).abs().max().item():.3e}")
+    check(f"{size}px forward, intended == released",
+          torch.equal(fwd["intended"], fwd["released"]))
+    # Not bit-exact and cannot be: the reference sums 197 equal float32 copies of the
+    # same gradient per masked token, `_ScaleGrad` multiplies by 197 once. The claim is
+    # relative agreement at float32 resolution and identical signs, which is what
+    # `patch_autopgd` consumes.
+    scale = g_ref.abs().max().clamp_min(1e-12)
+    rel = ((grads["released"] - g_ref).abs().max() / scale).item()
+    signs_agree = bool((grads["released"].sign() == g_ref.sign()).all())
+    check(f"{size}px gradient, backward='released' == reference",
+          rel < 1e-6 and signs_agree,
+          f"relative {rel:.3e}, signs {'all agree' if signs_agree else 'DIFFER'}")
+
+    cos = F.cosine_similarity(g_ref.flatten(), grads["intended"].flatten(), dim=0).item()
+    disagree = (g_ref.sign() != grads["intended"].sign()).float().mean().item()
+    check(f"{size}px gradient, backward='intended' != reference",
+          not torch.equal(grads["intended"], g_ref),
+          f"cos {cos:.4f}, {100 * disagree:.1f}% of signs disagree")
+
 print("\nconfig plumbing")
 cfg = rsa.RSAConfig.for_patch(20, score_frame="per-head")
 check("score_frame round-trips", cfg.as_dict()["score_frame"] == "per-head")
@@ -160,6 +239,55 @@ try:
     check("rejects an unknown frame", False)
 except ValueError:
     check("rejects an unknown frame", True)
+try:
+    rsa.RSAConfig.for_patch(20, backward="nonsense")
+    check("rejects an unknown backward", False)
+except ValueError:
+    check("rejects an unknown backward", True)
+rel = rsa.RSAConfig.released(20)
+check("RSAConfig.released is the released reading on all four knobs",
+      (rel.window_rule, rel.renormalise, rel.score_frame, rel.backward)
+      == ("released", "uniform", "global", "released"),
+      f"{rel.window_rule}/{rel.renormalise}/{rel.score_frame}/{rel.backward}")
+
+print("\nrsa.verify on a stub 4-block model")
+
+
+class _StubBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.attn = _StubAttn()
+        self.norm = nn.LayerNorm(H * D)
+
+    def forward(self, t):
+        return t + self.attn(self.norm(t))
+
+
+class _StubViT(nn.Module):
+    def __init__(self, depth=4):
+        super().__init__()
+        self.blocks = nn.ModuleList(_StubBlock() for _ in range(depth))
+        self.head = nn.Linear(H * D, 10)
+
+    def forward(self, t):
+        for b in self.blocks:
+            t = b(t)
+        return self.head(t[:, 0])
+
+
+try:
+    out = rsa.verify(_StubViT(), torch.randn(B, CTX, H * D), patch_px=30, verbose=False)
+    check("verify passes", True,
+          f"identity {out['identity_max_abs_err']:.1e}, "
+          f"{out['n_distinct_windows']} distinct windows, "
+          f"masked {out['masked_token_counts']}")
+    check("end-to-end dx differs between the two backwards",
+          out["backward_sign_disagreement"] > 0,
+          f"cosine {out['backward_grad_cosine']:.4f}, "
+          f"{100 * out['backward_sign_disagreement']:.1f}% of input-gradient signs "
+          f"disagree across 4 stub blocks")
+except AssertionError as exc:
+    check("verify passes", False, str(exc))
 
 print()
 if failures:

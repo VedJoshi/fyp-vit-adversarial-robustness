@@ -6,10 +6,17 @@ this is how to run it.
 ## Quick start
 
 ```bash
-pip install torch torchvision timm matplotlib jupyterlab
+pip install -r code/requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
+pip install jupyterlab
 cd code
 jupyter lab notebooks/
 ```
+
+`requirements.txt` pins torch, torchvision and timm to the versions every result was
+produced under. **Do not float timm**: it upgraded to 1.0.29 unpinned during cluster
+setup, whose `Block.forward()` passes `attn_mask` and `is_causal` into the attention
+module, which `rsa.RSAAttention.forward` does not accept, so every RSA-active forward
+pass raised `TypeError`.
 
 Run `M1_baseline.ipynb` first. **`config.SCALE` is `FULL`**, which needs ImageNet-100
 on disk and runs in minutes; set it to `DEV` in `fyp/config.py` for the one-minute
@@ -123,9 +130,11 @@ covers four signs and `untested` names the fifth.
 **Signs 1 and 5 reject a plateau.** They are comparisons, and equality satisfies a
 comparison, so an attack that is simply stuck — same robust accuracy at every budget,
 same at one step as at a hundred — used to pass both. Equality now passes only where the
-attack has saturated at 0% and there is nothing left to improve on. That is Athalye's own
-carve-out and it is what lets the check fail against a defense rather than only against a
-broken harness.
+attack has saturated at 0% and there is nothing left to improve on, which is what lets
+the check fail against a defense rather than only against a broken harness. The paper
+says iterative attacks should outperform one-step attacks and that success should
+increase with distortion; **the saturation carve-out is this project's
+operationalization of that, not something Athalye et al. state**.
 
 `warning_signs` is the `L_inf` threat model. `patch_warning_signs` is the same five signs
 restated for the patch threat model, driven by whichever patch attack is passed in:
@@ -141,7 +150,16 @@ image, which leaves the attacker a free choice of input.
 
 ## Environment notes
 
-Verified on Python 3.13, torch 2.7.0+cu118, timm 1.0.15, RTX 4050 Laptop (6 GB).
+Verified on Python 3.13, torch 2.7.0+cu118, timm 1.0.15, RTX 4050 Laptop (6 GB). Pins in
+`requirements.txt`; the cluster installs the same set through
+`scripts/slurm/setup_env.sh`. `fyp/results.py` stamps torch, timm, device, commit and
+dirty state onto every record, so a result carries its own environment.
+
+- **numpy is not pinned to an exact version, and no record written before 8 September
+  2026 carries the one it ran under.** It matters because `data.rsa_class_wnids`
+  reproduces RSA's class draw through `np.random.seed(0)`. The legacy RandomState
+  stream that uses is stable across numpy 2.x, so the draw is safe; the gap is in the
+  provenance, not the draw. Pin it from `pip freeze` at the next cluster rebuild.
 
 - **torchvision is a CPU-only build** (`0.22.0+cpu`) alongside a CUDA torch. Harmless
   here — only `datasets` and `transforms` are used, which are pure Python — but
@@ -157,16 +175,24 @@ Verified on Python 3.13, torch 2.7.0+cu118, timm 1.0.15, RTX 4050 Laptop (6 GB).
 
 Each notebook ends with a `fyp.results.save(...)` cell writing `results/<name>.json`, and those
 files are committed. Figures and datasets stay ignored. Every record carries a `_meta` block with
-the scale, dataset, model, seed, torch version, device and git commit it was produced under, and
-an `is_result` flag that is true only at `FULL`.
+the scale, dataset, model, seed, torch and timm versions, device, git commit and dirty state it
+was produced under, plus the sample size and step count **the runner declared** rather than the
+scale it was imported at.
 
 ```python
-from fyp import results
-results.load("m2_attacks")["_meta"]["is_result"]
+m = results.load("m2_attacks")["_meta"]
+m["is_result"], m["full_sample"], m["n_eval_images"]
 ```
 
-**Check that flag before quoting a number.** DEV runs on Imagenette and its numbers are not
-comparable to RSA's.
+**Two flags, two questions.** `is_result` is whether this ran on the real dataset and model with
+honest provenance. `full_sample` is whether it used the whole 512-image evaluation sample. They
+are separate because several measurements are legitimately small by design — `validate_patch_fool`
+and `checkpoint_control` each run one 32-image batch and say so — and collapsing them would label
+a real validation "not a result". A run that declares nothing is neither, and prints
+"provenance incomplete".
+
+**Check both before quoting a number.** DEV runs on Imagenette and its numbers are not comparable
+to RSA's; a `RESULT, partial sample` number is real but is not a 512-image robust accuracy.
 
 ## The RSA defense
 
@@ -242,9 +268,17 @@ ladder (BPDA) is what has to get through it.
 rsa.verify(clf, torch.rand(4, 3, 224, 224).cuda())
 ```
 
-Five checks — window 0 reproduces the undefended logits at `0.000e+00`, every layer masks
-exactly `window²` tokens, CLS is masked at no layer, the twelve layers do not all pick the same
-window, and a gradient reaches the input. It raises naming the property that failed.
+Five asserted checks — window 0 reproduces the undefended logits at `0.000e+00`, every layer
+masks a count the window rule allows (`window²` for most rules; `padded` masks fewer at the
+grid edge and `multi` masks whatever its winning shape holds), CLS is masked at no layer, the
+twelve layers do not all pick the same window, and a gradient reaches the input. It raises
+naming the property that failed.
+
+A sixth measurement is reported rather than asserted: the input gradient under
+`backward="intended"` against `backward="released"`. Both are legitimate; the point is that a
+run has to say which it used. On a real DeiT-S at 20px the two are **essentially uncorrelated
+— cosine −0.005, with 50.3% of input-gradient signs disagreeing** — while the logits are
+bit-identical.
 
 The gradient check matters for Gate A specifically: the argmax is non-differentiable, but the
 network around it is not, and the attacker gets the gradient with the current mask held fixed.
@@ -401,6 +435,27 @@ reading is implemented behind a flag — `--window-rule`, `--score-frame`, `--re
 defaults are the values the authors' released implementation uses, verified against their code by
 `scripts/check_reference_fidelity.py`. Every sweep pins all three explicitly rather than relying
 on a default, so a result file does not change meaning when a default does.
+
+**Forward fidelity is not reproduction.** Those three flags settle what the defense *computes*.
+They do not settle what the attacker *differentiates*, and RSA's released code and this harness
+disagree there. Their line 101 replaces the masked values with
+`v.scatter(-2, idx.repeat(1, H, 197, D), v_mean)`; the index names the same row 197 times, so the
+forward writes it once but autograd routes the output gradient to all 197 repeated source
+elements. `torch.where` routes it once. The forward tensors are bit-identical at every patch
+size and the gradients are not — on a real DeiT-S the input-gradient cosine is **−0.005 with
+50.3% of signs disagreeing**, and since `patch_autopgd` takes `grad.sign()` the two settings
+optimise different patches. `--backward released` selects theirs; `scripts/check_reference_fidelity.py`
+pins it against the literal scatter loop and asserts that `intended` still differs, so neither
+can silently become the other.
+
+Three more differences separate this from "RSA as released", and none of them is a reading of
+the paper: the AutoPGD checkpoint spelling (`--schedule released`, one iteration later
+throughout), the attack loop's batching and still-correct filtering (`--batch-size`,
+`--attack-survivors-only`), and the window-side formula at `p % 16 == 1`
+(`--window-rule released`; it agrees with `ceil+1` at all five of RSA's sizes).
+`gate_a.py --released` sets all of them at once. Two further differences are inputs rather than
+flags — the authors' released checkpoint and their seed-0 class draw — so until those land, a
+result here is **the intended RSA operator, not RSA as released**.
 
 **No third party has implemented RSA's window rule.** Liu et al. (ICML 2023) mask single tokens
 the way the `topk` reading does, and were treated here as the one published reimplementation. That

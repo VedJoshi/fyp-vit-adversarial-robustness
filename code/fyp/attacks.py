@@ -215,6 +215,7 @@ def patch_autopgd(
     momentum: float = 0.75,
     rho: float = 0.75,
     init: str = "uniform",
+    schedule: str = "counter",
     aux_loss: Callable[[torch.Tensor], torch.Tensor] | None = None,
     aux_weight: float = 0.0,
 ) -> torch.Tensor:
@@ -236,8 +237,25 @@ def patch_autopgd(
        was not halved there.
     3. **Restart from the best point** whenever the step size halves.
 
-    Checkpoints follow the reference schedule: the first interval is `0.22 * steps`,
-    shrinking by `0.03 * steps` each time down to a floor of `0.06 * steps`.
+    Checkpoint intervals are the reference ones: the first is `0.22 * steps`, shrinking
+    by `0.03 * steps` each time down to a floor of `0.06 * steps`. `schedule` picks
+    which of the two published spellings of that schedule is used, because they are one
+    iteration apart:
+
+    ``"counter"``   fra31's `autopgd_base.py` increments a counter each iteration and
+                    checks when it reaches the interval, so at 100 steps the checks land
+                    at iterations 21, 40, 56, 69, 79, 86, 92, 98.
+    ``"released"``  the wrapper RSA's evaluation calls builds the same intervals into an
+                    explicit checkpoint list `[0, 22, 41, 57, 70, 80, 87, 93, 99]` and
+                    compares the iteration index against it, one later throughout.
+
+    An example sitting on a loss plateau keeps its step size for one extra iteration
+    under one of them and not the other, and worst-location aggregation can turn a
+    single-location difference into a robust/non-robust flip. `"counter"` is the default
+    because it is what every result before 8 September 2026 used; `"released"` is what a
+    "same attack as Table 1" claim needs, alongside `rsa.RSAConfig.released`. The
+    difference has not been measured on real data - `scripts/gate_a.py --schedule
+    released` is how to measure it.
 
     The threat model is the patch, not an eps-ball: the perturbation is confined to
     the patch by `patch_mask` and, at the default `eps = 1.0`, bounded only by the
@@ -272,9 +290,24 @@ def patch_autopgd(
     loss_fn = LOSSES[loss] if isinstance(loss, str) else loss
     mask = patch_mask(x.shape, top, left, size, x.device)
 
+    if schedule not in ("counter", "released"):
+        raise ValueError(f"unknown schedule {schedule!r}; pick 'counter' or 'released'")
+
     n_iter_2 = max(int(0.22 * steps), 1)
     n_iter_min = max(int(0.06 * steps), 1)
     size_decr = max(int(0.03 * steps), 1)
+
+    checkpoints: set[int] = set()
+    if schedule == "released":
+        # The explicit list the released wrapper builds, cumulated from the same
+        # intervals: [0, 22, 41, 57, ...]. Index 0 is never a check in the loop below,
+        # so it is dropped rather than special-cased.
+        c, interval = 0, n_iter_2
+        while c < steps:
+            c += interval
+            if c < steps:
+                checkpoints.add(c)
+            interval = max(interval - size_decr, n_iter_min)
 
     B = x.shape[0]
     bcast = (-1, 1, 1, 1)
@@ -345,7 +378,7 @@ def patch_autopgd(
             loss_best[better] = per[better]
 
             counter += 1
-            if counter == k:
+            if (i in checkpoints) if schedule == "released" else (counter == k):
                 halve = torch.max(
                     _check_oscillation(loss_steps, i, k, rho),
                     (1.0 - reduced_last) * (loss_best_last >= loss_best).float(),
@@ -483,9 +516,13 @@ def patch_fool(
        receiving the most attention at `select_layer`. The patch is therefore one
        16x16 token cell, grid-aligned - a different threat model from RSA's
        arbitrarily-placed 10-50 px squares, and not comparable to a Table 1 number.
-    2. **Two objectives.** Cross-entropy, plus `-log a[i, p]` averaged over every query
+    2. **Two objectives.** Cross-entropy, plus `log a[i, p]` averaged over every query
        row `i` at each layer in `attn_layers`, which is maximised when all attention
-       lands on the chosen patch `p`.
+       lands on the chosen patch `p`. The reference writes this as
+       `F.nll_loss(-log a, p)`; `nll_loss` negates its input, so the two are the same
+       term. Taking `-log a[i, p]` instead - as this function did before 8 September
+       2026 - maximises it by driving attention *off* the patch, which is the opposite
+       attack. `scripts/validate_patch_fool.py` now measures the direction.
     3. **Per-layer gradient surgery.** Each layer's attention gradient is taken
        separately, projected off the cross-entropy gradient where the two conflict
        (`_pcgrad`), and only then accumulated at `atten_loss_weight`. Summing the terms
@@ -555,9 +592,16 @@ def patch_fool(
 
         for layer in attn_layers:
             w = cap[layer].weights.mean(dim=1)                    # (B, N, N), head mean
-            nll = -torch.log(w.clamp_min(1e-12))
+            # `log a[i, p]`, not `-log a[i, p]`. The objective is *maximised* below
+            # (`delta.grad = -grad`), and the term has to grow as attention moves onto
+            # the patch. The reference reaches the same sign through `F.nll_loss`,
+            # which negates its input: `nll_loss(-log a, p) = log a[p]`. Dropping that
+            # second negation makes the attention term fight the attack it is named
+            # for, and cross-entropy alone can still flip the class, so the failure is
+            # invisible to a validation that only checks classification success.
+            logw = torch.log(w.clamp_min(1e-12))
             idx = target.view(B, 1, 1).expand(B, w.shape[1], 1)
-            attn_loss = nll.gather(2, idx).mean()
+            attn_loss = logw.gather(2, idx).mean()
 
             (a_grad,) = torch.autograd.grad(attn_loss, delta, retain_graph=True)
             projected = _pcgrad(a_grad.view(B, -1), ce_flat, normalise=(pcgrad == "normalised"))

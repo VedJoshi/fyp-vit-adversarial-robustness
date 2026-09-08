@@ -57,9 +57,13 @@ def main():
     print(f"\n{n_batches} batches, {n_batches * config.SCALE.batch_size} images, "
           f"{args.steps} steps\n")
 
+    n_total = n_batches * config.SCALE.batch_size
+
     def batches():
-        # A fresh loader per run, so each threat model sees the same images.
-        return islice(data.make_loader(data.eval_subset(ds)), n_batches)
+        # A fresh loader per run, so each threat model sees the same images. The draw
+        # is at `n_total`, not the front of a 512-draw: sorted indices make a prefix the
+        # lowest order statistics of the sample, which over-represents early wnids.
+        return islice(data.make_loader(data.eval_subset(ds, n_total)), n_batches)
 
     if args.threat in ("linf", "both"):
         t0 = time.time()
@@ -70,7 +74,8 @@ def main():
         rec = results.load("m2_attacks")
         rec.pop("_meta", None)
         rec["athalye_warning_signs"] = res
-        results.save("m2_attacks", rec)
+        results.save("m2_attacks", rec,
+                     n_eval_images=n_total, attack_steps=args.steps)
 
     if args.threat in ("patch", "both"):
         t0 = time.time()
@@ -82,7 +87,8 @@ def main():
         res["model_info"] = info
         print()
         diagnostics.print_patch_report(res)
-        results.save("m4_patch_warning_signs", res)
+        results.save("m4_patch_warning_signs", res,
+                     n_eval_images=n_total, attack_steps=args.steps)
 
 
 if __name__ == "__main__":

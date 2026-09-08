@@ -1,16 +1,21 @@
 {
   "_meta": {
-    "written_utc": "2026-08-29T10:23:57+00:00",
-    "git_commit": "a50d24b",
+    "written_utc": "2026-09-08T06:45:28+00:00",
+    "git_commit": "40173b1",
+    "git_dirty": true,
     "scale": "full",
     "dataset": "imagenet100",
     "model": "deit_small_patch16_224",
-    "n_eval_images": 512,
-    "attack_steps": 100,
+    "n_eval_images": 32,
+    "attack_steps": 250,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
     "seed": 0,
     "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
     "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
-    "is_result": true
+    "is_result": true,
+    "full_sample": false
   },
   "runs": {
     "autopgd_fixed": {
@@ -18,15 +23,15 @@
       "robust_acc": 9.375,
       "asr": 89.28571428571429,
       "n": 32,
-      "minutes": 0.31,
+      "minutes": 0.32,
       "steps": 100
     },
     "fool_fixed": {
       "clean_acc": 87.5,
-      "robust_acc": 3.125,
-      "asr": 96.42857142857143,
+      "robust_acc": 0.0,
+      "asr": 100.0,
       "n": 32,
-      "minutes": 1.6,
+      "minutes": 2.81,
       "steps": 250
     },
     "fool_selected": {
@@ -34,7 +39,7 @@
       "robust_acc": 0.0,
       "asr": 100.0,
       "n": 32,
-      "minutes": 1.65,
+      "minutes": 4.11,
       "steps": 250,
       "tokens": [
         9,
@@ -87,6 +92,72 @@
   "leak_outside_patch": 0.0,
   "fixed_token": 90,
   "patch_px": 16,
+  "attention_on_target": {
+    "fixed": {
+      "layers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "clean": [
+        0.005102725233882666,
+        0.004979557823389769,
+        0.005468960385769606,
+        0.00561418617144227,
+        0.005560928024351597
+      ],
+      "attacked": [
+        0.0020183620508760214,
+        0.002506294986233115,
+        0.008629538118839264,
+        0.017385266721248627,
+        0.01687914878129959
+      ],
+      "delta": [
+        -0.0030843631830066442,
+        -0.0024732628371566534,
+        0.0031605777330696583,
+        0.011771080549806356,
+        0.011318220756947994
+      ],
+      "n_layers_raised": 3
+    },
+    "selected": {
+      "layers": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "clean": [
+        0.00506370747461915,
+        0.005467121489346027,
+        0.007980969734489918,
+        0.011321553960442543,
+        0.010625257156789303
+      ],
+      "attacked": [
+        0.0020298203453421593,
+        0.0021349452435970306,
+        0.00766992662101984,
+        0.01463188137859106,
+        0.017162419855594635
+      ],
+      "delta": [
+        -0.003033887129276991,
+        -0.0033321762457489967,
+        -0.0003110431134700775,
+        0.0033103274181485176,
+        0.006537162698805332
+      ],
+      "n_layers_raised": 2
+    }
+  },
+  "attention_direction_asserted_on": "fixed",
+  "pass_attention_objective_raises_target": true,
   "pass_at_least_as_strong_as_autopgd": true,
   "reference": "GATECH-EIC/Patch-Fool, checked 29 Aug 2026",
   "model_info": {
@@ -111,5 +182,5 @@
     "fused_attn_disabled": 12,
     "device": "cuda"
   },
-  "invocation": "scripts/validate_patch_fool.py"
+  "invocation": "code/scripts/validate_patch_fool.py"
 }

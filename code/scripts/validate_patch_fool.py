@@ -10,10 +10,18 @@ batch, all at a 16 px token-aligned patch, which is Patch-Fool's own threat mode
     fool_selected   Patch-Fool choosing its own token by attention, which is the
                     attack as published.
 
-The pass condition is the same one PatchAutoPGD was held to: **Patch-Fool at a fixed
-location must be at least as strong as PatchAutoPGD at that location.** If it is
+Two pass conditions. The first is the one PatchAutoPGD was held to: **Patch-Fool at a
+fixed location must be at least as strong as PatchAutoPGD at that location.** If it is
 weaker, the implementation is wrong rather than the model robust. Choosing its own
 location should then be stronger again; if it is not, patch selection is wrong.
+
+The second is on the objective rather than the outcome: **the attack must raise the
+attention paid to the token it attacks**, measured at the layers it optimises. Success
+at flipping the label does not imply it, because cross-entropy can carry the attack on
+its own while the attention term pushes the other way. That is what a sign error in
+`patch_fool`'s second objective looks like from outside, and until 8 September 2026 it
+was what this implementation did; measurements 2 and 3 are about attention, so an
+attack that only happens to misclassify cannot support them.
 
 Robust accuracy is conditioned on the clean prediction throughout - an image the model
 already misclassifies is never robust, since the patch may hold the original pixels.
@@ -38,7 +46,31 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fyp import attacks, config, data, models, results  # noqa: E402
+from fyp import attacks, config, data, hooks, models, results  # noqa: E402
+
+
+def target_attention(model, x: torch.Tensor, tokens: torch.Tensor,
+                     layers=None) -> dict[int, float]:
+    """Mean attention every query places on the attacked token, per layer.
+
+    The quantity Patch-Fool's second objective is supposed to raise. Comparing it
+    between the clean and adversarial images is what distinguishes an attention-aware
+    attack from a cross-entropy attack wearing its name: a sign error in the objective
+    leaves classification success intact and shows up only here.
+    """
+    if layers is None:
+        n_blocks = len(hooks._blocks(model))
+        layers = [i for i in range(n_blocks // 2) if i != 0]
+    target = tokens[:, 0] + 1                                # into the 197-token axis
+    with hooks.AttentionCapture(model, layers=layers, store=("weights",)) as cap:
+        with torch.no_grad():
+            model(x)
+        out = {}
+        for layer in layers:
+            w = cap[layer].weights.mean(dim=1)                # (B, N, N), head mean
+            idx = target.view(-1, 1, 1).expand(-1, w.shape[1], 1)
+            out[layer] = float(w.gather(2, idx).mean())
+    return out
 
 
 def parse_args():
@@ -141,8 +173,8 @@ def main():
     record("autopgd_fixed", adv, time.time() - t0, steps=args.autopgd_steps)
 
     t0 = time.time()
-    adv, _ = attacks.patch_fool(clf, x, y, steps=args.steps, patches=fixed)
-    record("fool_fixed", adv, time.time() - t0, steps=args.steps)
+    adv_fixed, _ = attacks.patch_fool(clf, x, y, steps=args.steps, patches=fixed)
+    record("fool_fixed", adv_fixed, time.time() - t0, steps=args.steps)
 
     t0 = time.time()
     adv, tokens = attacks.patch_fool(clf, x, y, steps=args.steps)
@@ -157,6 +189,44 @@ def main():
           f"({'ok' if outside == 0.0 else 'LEAK'})")
     print(f"  {sel['distinct_tokens']} distinct tokens selected across {x.shape[0]} images")
 
+    # Direction of the attention objective. Patch-Fool's second term exists to drag
+    # attention *onto* the patch, so the attacked image must place more attention on
+    # the attacked token than the clean image does. Classification success does not
+    # test this: cross-entropy alone can flip the label while the attention term pushes
+    # the other way, which is exactly what a sign error in the objective looks like.
+    # Measured on the **fixed-token** run, and that choice is the test. `fool_selected`
+    # attacks the token that already receives the most attention at `select_layer`, so
+    # its target starts at a local maximum and has little room to rise; a correct
+    # objective can look weak there for a reason that has nothing to do with its sign.
+    # Token 90 is chosen without reference to attention, so a rise there is the
+    # objective working. The selected-token run is reported alongside, not asserted on.
+    direction = {}
+    for name, img, tok in (("fixed", adv_fixed, fixed), ("selected", adv, tokens)):
+        a_clean = target_attention(clf, x, tok)
+        a_adv = target_attention(clf, img, tok)
+        layers = sorted(a_clean)
+        delta = {L: a_adv[L] - a_clean[L] for L in layers}
+        direction[name] = {
+            "layers": layers,
+            "clean": [a_clean[L] for L in layers],
+            "attacked": [a_adv[L] for L in layers],
+            "delta": [delta[L] for L in layers],
+            "n_layers_raised": sum(1 for L in layers if delta[L] > 0),
+        }
+        print(f"\n  attention on the attacked token, {name} patch, layers {layers}")
+        for L in layers:
+            print(f"    layer {L}: clean {a_clean[L]:.5f} -> attacked {a_adv[L]:.5f}"
+                  f"   {delta[L]:+.5f}")
+
+    n_raised = direction["fixed"]["n_layers_raised"]
+    layers = direction["fixed"]["layers"]
+    direction_ok = n_raised > len(layers) / 2
+    print(f"\n  {'PASS' if direction_ok else 'FAIL'}  the attention objective raises "
+          f"target attention at {n_raised} of {len(layers)} optimised layers "
+          f"(fixed patch; {direction['selected']['n_layers_raised']} of {len(layers)} on "
+          f"the selected patch, which starts at an attention maximum)"
+          + ("" if direction_ok else "  - the objective's sign is inverted"))
+
     weaker = runs["fool_fixed"]["robust_acc"] > runs["autopgd_fixed"]["robust_acc"]
     print("\n" + ("  FAIL  Patch-Fool is weaker than PatchAutoPGD at the same location "
                   "- the implementation is wrong, not the model robust"
@@ -170,13 +240,17 @@ def main():
         "leak_outside_patch": outside,
         "fixed_token": args.token,
         "patch_px": config.PATCH_SIZE,
+        "attention_on_target": direction,
+        "attention_direction_asserted_on": "fixed",
+        "pass_attention_objective_raises_target": direction_ok,
         "pass_at_least_as_strong_as_autopgd": not weaker,
         "reference": "GATECH-EIC/Patch-Fool, checked 29 Aug 2026",
         "model_info": info,
         "invocation": " ".join(sys.argv),
     }
     if not args.no_save:
-        results.save("m4_patch_fool_validation", payload)
+        results.save("m4_patch_fool_validation", payload,
+                     n_eval_images=int(x.shape[0]), attack_steps=args.steps)
 
 
 if __name__ == "__main__":

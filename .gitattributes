@@ -9,6 +9,14 @@
 .gitignore     text eol=lf
 .gitattributes text eol=lf
 
+# Anything the cluster executes. Slurm refuses a batch script containing CRLF
+# outright ("Batch script contains DOS line breaks"), and bash silently appends the
+# \r to the last argument of every line, so a shell script that survives the check
+# fails later in ways that are hard to read. These two lines were missing until
+# 8 September 2026, which is why every .sbatch in the repo was CRLF.
+*.sbatch  text eol=lf
+*.sh      text eol=lf
+
 # Binaries — never touch these
 *.pdf     binary
 *.docx    binary

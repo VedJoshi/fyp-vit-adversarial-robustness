@@ -1,13 +1,16 @@
 % Generated from the Obsidian “Research Resources” notes — do not hand-edit.
 % Regenerate with the `bib` command.
 
-@misc{athalye2018obfuscated,
-  title        = {Obfuscated Gradients Give a False Sense of Security: Circumventing Defenses to Adversarial Examples},
-  author       = {Anish Athalye and Nicholas Carlini and David Wagner},
-  year         = {2018},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.1802.00420},
-  url          = {https://doi.org/10.48550/arxiv.1802.00420}
+@inproceedings{athalye2018obfuscated,
+  title     = {Obfuscated Gradients Give a False Sense of Security: Circumventing Defenses to Adversarial Examples},
+  author    = {Anish Athalye and Nicholas Carlini and David Wagner},
+  year      = {2018},
+  booktitle = {Proceedings of the 35th International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {80},
+  pages     = {274--283},
+  publisher = {PMLR},
+  url       = {https://proceedings.mlr.press/v80/athalye18a.html}
 }
 
 @inproceedings{bouri2026art,
@@ -42,13 +45,25 @@
   url          = {https://doi.org/10.48550/arxiv.2603.12688}
 }
 
-@misc{cohen2019certified,
-  title        = {Certified Adversarial Robustness via Randomized Smoothing},
-  author       = {Jeremy M. Cohen and Elan Rosenfeld and J. Zico Kolter},
-  year         = {2019},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.1902.02918},
-  url          = {https://doi.org/10.48550/arxiv.1902.02918}
+@inproceedings{cohen2019certified,
+  title     = {Certified Adversarial Robustness via Randomized Smoothing},
+  author    = {Jeremy M. Cohen and Elan Rosenfeld and J. Zico Kolter},
+  year      = {2019},
+  booktitle = {Proceedings of the 36th International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {97},
+  pages     = {1310--1320},
+  publisher = {PMLR},
+  url       = {https://proceedings.mlr.press/v97/cohen19c.html}
+}
+
+@misc{croce2022interplay,
+  title        = {On the Interplay of Adversarial Robustness and Architecture Components: Patches, Convolution and Attention},
+  author       = {Francesco Croce and Matthias Hein},
+  year         = {2022},
+  howpublished = {ICML 2022 Workshop on New Frontiers in Adversarial Machine Learning},
+  note         = {arXiv:2209.06953},
+  url          = {https://arxiv.org/abs/2209.06953}
 }
 
 @inproceedings{cools2025vision,
@@ -64,22 +79,21 @@
   url       = {https://doi.org/10.1117/12.3070069}
 }
 
-@misc{fu2022patchfool,
-  title        = {Patch-Fool: Are Vision Transformers Always Robust Against Adversarial Perturbations?},
-  author       = {Yonggan Fu and Shunyao Zhang and Wu, Shang and Wan, Cheng and Yingyan Lin},
-  year         = {2022},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.2203.08392},
-  url          = {https://doi.org/10.48550/arxiv.2203.08392}
+@inproceedings{fu2022patchfool,
+  title     = {Patch-Fool: Are Vision Transformers Always Robust Against Adversarial Perturbations?},
+  author    = {Yonggan Fu and Shunyao Zhang and Shang Wu and Cheng Wan and Yingyan Lin},
+  year      = {2022},
+  booktitle = {International Conference on Learning Representations},
+  url       = {https://openreview.net/forum?id=28ib9tf6zhr}
 }
 
-@misc{goodfellow2014explaining,
-  title        = {Explaining and Harnessing Adversarial Examples},
-  author       = {Ian Goodfellow and Jonathon Shlens and Christian Szegedy},
-  year         = {2014},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.1412.6572},
-  url          = {https://doi.org/10.48550/arxiv.1412.6572}
+@inproceedings{goodfellow2014explaining,
+  title     = {Explaining and Harnessing Adversarial Examples},
+  author    = {Ian Goodfellow and Jonathon Shlens and Christian Szegedy},
+  year      = {2015},
+  booktitle = {International Conference on Learning Representations},
+  note      = {arXiv:1412.6572},
+  url       = {https://arxiv.org/abs/1412.6572}
 }
 
 @incollection{gu2022are,
@@ -105,13 +119,12 @@
   url       = {https://doi.org/10.1109/cvpr52729.2023.00400}
 }
 
-@misc{hu2024specformer,
-  title        = {SpecFormer: Guarding Vision Transformer Robustness via Maximum Singular Value Penalization},
-  author       = {Xixu Hu and Runkai Zheng and Jindong Wang and Cheuk Hang Leung and Qi Wu and Xing Xie},
-  year         = {2024},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.2402.03317},
-  url          = {https://doi.org/10.48550/arxiv.2402.03317}
+@inproceedings{hu2024specformer,
+  title     = {SpecFormer: Guarding Vision Transformer Robustness via Maximum Singular Value Penalization},
+  author    = {Xixu Hu and Runkai Zheng and Jindong Wang and Cheuk Hang Leung and Qi Wu and Xing Xie},
+  year      = {2024},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  note      = {arXiv:2402.03317}
 }
 
 @inproceedings{jain2024understanding,
@@ -126,6 +139,8 @@
   url       = {https://doi.org/10.1109/cvpr52733.2024.02336}
 }
 
+% Presented at a CVPR 2022 workshop. That is not evidence of a CVPR main-conference
+% venue, so this stays a preprint entry until a proceedings record is found.
 @misc{joshi2021adversarial,
   title        = {Adversarial Token Attacks on Vision Transformers},
   author       = {Ameya Joshi and Gauri Jagatap and Chinmay Hegde},
@@ -139,7 +154,12 @@
   title     = {Understanding and Defending Patched-based Adversarial Attacks for Vision Transformer},
   author    = {Liang Liu and Yanan Guo and Youtao Zhang and Jun Yang},
   year      = {2023},
-  booktitle = {Proceedings of the 40th International Conference on Machine Learning}
+  booktitle = {Proceedings of the 40th International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {202},
+  pages     = {21631--21657},
+  publisher = {PMLR},
+  url       = {https://proceedings.mlr.press/v202/liu23n.html}
 }
 
 @inproceedings{lovisotto2022give,
@@ -212,22 +232,25 @@
   url       = {https://doi.org/10.1109/acsac63791.2024.00100}
 }
 
-@misc{takahashi2025understanding,
-  title        = {Understanding Sensitivity of Differential Attention through the Lens of Adversarial Robustness},
-  author       = {Tsubasa Takahashi and Shojiro Yamabe and Futa Waseda and Kento Sasaki},
-  year         = {2025},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.2510.00517},
-  url          = {https://doi.org/10.48550/arxiv.2510.00517}
+@inproceedings{takahashi2025understanding,
+  title     = {Understanding Sensitivity of Differential Attention through the Lens of Adversarial Robustness},
+  author    = {Tsubasa Takahashi and Shojiro Yamabe and Futa Waseda and Kento Sasaki},
+  year      = {2026},
+  booktitle = {International Conference on Learning Representations},
+  note      = {arXiv:2510.00517},
+  url       = {https://arxiv.org/abs/2510.00517}
 }
 
-@misc{zhai2023stabilizing,
-  title        = {Stabilizing Transformer Training by Preventing Attention Entropy Collapse},
-  author       = {Shuangfei Zhai and Tatiana Likhomanenko and Etai Littwin and Dan Busbridge and Jason Ramapuram and Yizhe Zhang and Jiatao Gu and Josh Susskind},
-  year         = {2023},
-  howpublished = {arXiv (Cornell University)},
-  doi          = {10.48550/arxiv.2303.06296},
-  url          = {https://doi.org/10.48550/arxiv.2303.06296}
+@inproceedings{zhai2023stabilizing,
+  title     = {Stabilizing Transformer Training by Preventing Attention Entropy Collapse},
+  author    = {Shuangfei Zhai and Tatiana Likhomanenko and Etai Littwin and Dan Busbridge and Jason Ramapuram and Yizhe Zhang and Jiatao Gu and Josh Susskind},
+  year      = {2023},
+  booktitle = {Proceedings of the 40th International Conference on Machine Learning},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {202},
+  pages     = {40770--40803},
+  publisher = {PMLR},
+  url       = {https://proceedings.mlr.press/v202/zhai23a.html}
 }
 
 @inproceedings{zheng2025revisiting,

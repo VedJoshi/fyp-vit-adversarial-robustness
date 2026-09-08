@@ -222,7 +222,8 @@ def main():
         "invocation": " ".join(sys.argv),
     }
     if not args.no_save:
-        results.save("m7_aas_efficacy", payload)
+        results.save("m7_aas_efficacy", payload,
+                     n_eval_images=n_total, attack_steps=args.steps)
 
 
 if __name__ == "__main__":

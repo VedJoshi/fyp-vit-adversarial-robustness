@@ -187,7 +187,8 @@ def main() -> None:
 
     plot(records, config.FIGURES_ROOT / "m1_logit_gaps_by_model.png")
 
-    results.save("m1_logit_gap_by_model", {
+    results.save("m1_logit_gap_by_model", n_eval_images=int(x.shape[0]),
+                 attack_steps=None, payload={
         # The invocation, so the record can be reproduced from the record. The default
         # batch is the scale's, which is not the size this was first run at.
         "invocation": f"python scripts/logit_gap_by_model.py --batch {args.batch} "

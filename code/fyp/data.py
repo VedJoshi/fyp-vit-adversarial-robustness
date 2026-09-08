@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import Sequence
 from pathlib import Path
 
 import torch
@@ -149,11 +150,23 @@ def build_dataset(
     dataset: str | None = None,
     split: str = "val",
     transform=to_unit,
+    expect_wnids: Sequence[str] | None = None,
 ) -> tuple[ImageFolder, list[str], list[int]]:
     """Return `(dataset, wnids, class_indices)` with all three in the same order.
 
     `class_indices[t]` is the ImageNet-1k index of the class the loader calls `t`.
     Pass it straight to `models.load_model(class_indices=...)`.
+
+    `expect_wnids` asserts *which* 100 classes are on disk, not merely that there are
+    100 of them in sorted order. Without it every internal check still passes on the
+    wrong task: a directory of any 100 valid wnids builds a correctly ordered 100-way
+    head and reaches plausible clean accuracy, so shape, order and accuracy cannot tell
+    RSA's seed-0 draw from this project's seed-1234 draw, which share 14 of 100 classes.
+    Pass `data.rsa_class_wnids()` for the authors' task and `data.imagenet100_wnids()`
+    for this project's.
+
+    A class count other than `config.N_CLASSES` is an error, not a warning: it changes
+    the head width and therefore every accuracy below it.
     """
     dataset = dataset or config.SCALE.dataset
 
@@ -185,7 +198,25 @@ def build_dataset(
     assert len(class_indices) == len(wnids) == len(ds.classes)
 
     if dataset == "imagenet100" and len(wnids) != config.N_CLASSES:
-        print(f"  warning: expected {config.N_CLASSES} classes, found {len(wnids)}")
+        raise ValueError(
+            f"{directory} has {len(wnids)} classes, expected {config.N_CLASSES}. The "
+            f"head width follows this count, so every accuracy below it would be "
+            f"against a different problem. Rebuild with scripts/build_imagenet100.py."
+        )
+
+    if expect_wnids is not None:
+        expected = sorted(expect_wnids)
+        if wnids != expected:
+            overlap = len(set(wnids) & set(expected))
+            raise ValueError(
+                f"{directory} holds a different class subset: {overlap} of "
+                f"{len(expected)} wnids overlap.\n"
+                f"  on disk  : {wnids[:4]} ...\n"
+                f"  expected : {expected[:4]} ...\n"
+                f"Class order fixes the label indices, so this would evaluate a "
+                f"different 100-way problem while every shape and order check passes. "
+                f"Rebuild with scripts/build_imagenet100.py against the expected list."
+            )
 
     return ds, wnids, class_indices
 
@@ -199,6 +230,25 @@ def eval_subset(
 
     RSA evaluates on "512 randomly sampled images". The fixed seed gives every method
     in a comparison the same sample.
+
+    **Ask for the size you are going to measure.** The returned indices are sorted, so
+    the first k items of `eval_subset(ds, 512)` are the k *lowest* of 512 order
+    statistics, not a random k. `ImageFolder` orders by class directory, so a prefix of
+    a sorted sample over-represents early wnids: the first 32 of a 512-draw over 100
+    classes reach about class 6 of 100. A run that wants 32 images and slices a 512-draw
+    is estimating that prefix population, not a 32-image random sample. Pass `n=32`.
+
+    The sort itself is deliberate and stays: it makes batch order stable, so an index
+    recorded by one run names the same image in another.
+
+    **This is not the authors' 512 images.** Their loader continues the same NumPy
+    stream that drew the classes (`rsa_class_wnids`) to permute the assembled image
+    database, so their sample depends on the class draw, on the directory listing order,
+    and on how many images each class contributed; this one is an independent
+    `random.Random(config.SEED)` draw over `ImageFolder`'s own ordering. Matching
+    `rsa_class_wnids` fixes the *task*; it does not fix which 512 images are evaluated,
+    and no transcription of their image sampling exists here to fix it with. A
+    reproduction claim has to say so.
     """
     n = n or config.SCALE.n_eval_images
     n = min(n, len(ds))

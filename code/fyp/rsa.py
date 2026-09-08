@@ -32,12 +32,16 @@ Six properties of the implementation:
 3. **Masked tokens are neutralised as keys and as values**, so they carry nothing
    distinctive to any other token. They remain queries: their own output rows are
    still computed from the surviving keys.
-4. **Three knobs are config flags**, because the paper fixes none of them: the
+4. **Four knobs are config flags.** The paper fixes none of the first three: the
    window rule (`WINDOW_RULES`), what happens to a masked key's attention weight
    (`RENORMALISATIONS`), and which mean the anomaly score is taken against
    (`SCORE_FRAMES`). Each default is now the authors' released code rather than a
    reading of the paper; the alternatives are kept so earlier runs stay reproducible
-   and so the spread across them can be measured.
+   and so the spread across them can be measured. The fourth, `BACKWARDS`, picks which
+   *derivative* the masking step carries: the released code's repeated-index `scatter`
+   and this module's `torch.where` produce bit-identical forward tensors and different
+   gradients, so an attack is not the authors' attack unless it is also selected.
+   `RSAConfig.released(patch_px)` sets all four to the released reading at once.
 5. **The argmax is not differentiable.** The selection runs under `no_grad` and the
    window index enters the graph only as a boolean mask. Gradients flow through the
    surviving logits and values. Rung L4 of the attack ladder is what has to get
@@ -129,9 +133,43 @@ DEFAULT_SCORE_FRAME = metrics.DEFAULT_SCORE_FRAME
 #: against an interior token's nine, so a corner patch can never be centred. On one
 #: batch at 20px, with the patch re-optimised under each reading, ``"padded"`` takes a
 #: corner location from 6.25% to 50.00% robust, costs about one image at the interior
-#: and leaves clean accuracy at 93.75%. See `../gate-a-diagnosis.md`.
-WINDOW_RULES = ("ceil+1", "padded", "ceil", "multi", "token", "topk")
+#: and leaves clean accuracy at 93.75%. See `../../01_gate_a/gate-a-diagnosis.md`.
+#: ``"released"``  side `p // 16 + 1 (+1 if p % 16 > 1)`, the authors' own formula,
+#:                 transcribed at `metrics.rsa_window_size_released`. Identical to
+#:                 ``"ceil+1"`` at 10, 20, 30, 40 and 50 px and at every other size
+#:                 where `p % 16 != 1`; it exists so an exact-released control does not
+#:                 have to rely on that coincidence holding.
+WINDOW_RULES = ("ceil+1", "padded", "ceil", "multi", "token", "topk", "released")
 DEFAULT_WINDOW_RULE = "ceil+1"
+
+#: Which derivative the masking step carries. The forward output is identical either
+#: way; only the gradient the attacker differentiates through differs.
+#:
+#: ``"intended"``  the natural derivative of the operator Algorithm 1 describes. The
+#:                 replacement is `torch.where(masked, mu, v)`, so a masked position
+#:                 passes its output gradient to `mu` once.
+#: ``"released"``  the derivative the authors' released code actually has. At
+#:                 `pycls/models/vision_transformer.py:101` of
+#:                 wagner-group/robust-self-attention the replacement is
+#:                 `v.scatter(-2, idx.repeat(1, H, context_length, D), v_mean)` with
+#:                 `v_mean = v_mean_head.repeat(1, 1, context_length, 1)`. The index
+#:                 tensor names the same target row `context_length` times, so the
+#:                 forward merely writes that row once, but autograd routes the output
+#:                 gradient back to every one of the 197 repeated source elements. The
+#:                 gradient reaching `mu` is therefore `config.N_TOKENS` times the
+#:                 intended one; the gradient reaching the unmasked values is the same.
+#:
+#: This is not a cosmetic difference. `attacks.patch_autopgd` takes `grad.sign()`, so
+#: the two settings send the attack in materially different directions: on random
+#: tensors at RSA's five patch sizes the input-gradient cosine is 0.21-0.45 and 34-38%
+#: of gradient signs disagree, while the forward tensors are bit-exact. Every result
+#: recorded before 8 September 2026 was produced under ``"intended"``, which is why
+#: that is still the default; ``"released"`` is what an "attacked the authors' released
+#: implementation" claim requires. `scripts/check_reference_fidelity.py` proves the
+#: two implementations agree forward and that ``"released"`` matches the literal
+#: scatter loop's gradient.
+BACKWARDS = ("intended", "released")
+DEFAULT_BACKWARD = "intended"
 
 
 @dataclass(frozen=True)
@@ -149,6 +187,7 @@ class RSAConfig:
     renormalise: str = DEFAULT_RENORMALISATION
     window_rule: str = DEFAULT_WINDOW_RULE
     score_frame: str = DEFAULT_SCORE_FRAME
+    backward: str = DEFAULT_BACKWARD
 
     def __post_init__(self):
         if self.renormalise not in RENORMALISATIONS:
@@ -163,6 +202,10 @@ class RSAConfig:
             raise ValueError(
                 f"unknown score_frame {self.score_frame!r}; pick from {SCORE_FRAMES}"
             )
+        if self.backward not in BACKWARDS:
+            raise ValueError(
+                f"unknown backward {self.backward!r}; pick from {BACKWARDS}"
+            )
         if not 0 <= self.window <= config.GRID:
             raise ValueError(f"window {self.window} outside [0, {config.GRID}]")
 
@@ -170,7 +213,8 @@ class RSAConfig:
     def for_patch(cls, patch_px: int,
                   renormalise: str = DEFAULT_RENORMALISATION,
                   window_rule: str = DEFAULT_WINDOW_RULE,
-                  score_frame: str = DEFAULT_SCORE_FRAME) -> "RSAConfig":
+                  score_frame: str = DEFAULT_SCORE_FRAME,
+                  backward: str = DEFAULT_BACKWARD) -> "RSAConfig":
         """The config RSA uses against a `patch_px`-pixel patch.
 
         `patch_px = 0` gives `window = 0`, which is no masking. Otherwise the window is
@@ -178,7 +222,19 @@ class RSAConfig:
         """
         window = 0 if patch_px <= 0 else metrics.rsa_window_size(patch_px, rule=window_rule)
         return cls(patch_px=patch_px, window=window, renormalise=renormalise,
-                   window_rule=window_rule, score_frame=score_frame)
+                   window_rule=window_rule, score_frame=score_frame, backward=backward)
+
+    @classmethod
+    def released(cls, patch_px: int) -> "RSAConfig":
+        """The config that reproduces the authors' released code, forward and backward.
+
+        Their window formula, their `1/197` renormalisation, their globally-centred
+        score, and their repeated-index `scatter` derivative. This is the setting an
+        "attacked RSA as released" claim needs; `for_patch` alone gives the operator
+        Algorithm 1 describes, which is forward-identical and backward-different.
+        """
+        return cls.for_patch(patch_px, renormalise="uniform", window_rule="released",
+                             score_frame="global", backward="released")
 
     @property
     def masked_tokens(self) -> int:
@@ -214,8 +270,27 @@ class RSAConfig:
             "renormalise": self.renormalise,
             "window_rule": self.window_rule,
             "score_frame": self.score_frame,
+            "backward": self.backward,
             "masked_tokens": self.masked_tokens,
         }
+
+
+class _ScaleGrad(torch.autograd.Function):
+    """Identity forward; multiplies the gradient by `scale` on the way back.
+
+    Reproduces what the released `scatter` does to the gradient of the replacement
+    mean without paying for `window^2` scatters of a (B, H, 197, 64) tensor per layer.
+    `check_reference_fidelity.py` pins it against the literal loop.
+    """
+
+    @staticmethod
+    def forward(ctx, x, scale: float):
+        ctx.scale = scale
+        return x
+
+    @staticmethod
+    def backward(ctx, g):
+        return g * ctx.scale, None
 
 
 class RSAAttention(nn.Module):
@@ -355,26 +430,33 @@ class RSAAttention(nn.Module):
             values = mask[:, None, :, None]                   # (B, 1, N, 1) over tokens
 
             mu = v[:, :, 1:, :].mean(dim=2, keepdim=True)     # (B, H, 1, head_dim)
+            if self.cfg.backward == "released":
+                mu = _ScaleGrad.apply(mu, float(config.N_TOKENS))
             v = torch.where(values, mu.expand_as(v), v)
 
+            # Dropout before the overwrite, as upstream does at
+            # `vision_transformer.py:96-107`: softmax, attn_drop, then scatter. At
+            # evaluation p = 0 and the order cannot matter; in training mode it can,
+            # because dropping a masked column would otherwise scale 1/197 by 1/(1-p).
+            # The "softmax" mode masks pre-softmax and has no upstream counterpart.
             if self.cfg.renormalise == "softmax":
-                attn = logits.masked_fill(keys, float("-inf")).softmax(dim=-1)
+                attn = self.attn_drop(logits.masked_fill(keys, float("-inf")).softmax(dim=-1))
             elif self.cfg.renormalise == "zero":
-                attn = logits.softmax(dim=-1).masked_fill(keys, 0.0)
+                attn = self.attn_drop(logits.softmax(dim=-1)).masked_fill(keys, 0.0)
             else:  # "uniform" - the paper's literal alpha_{.,i} <- 1/N, CLS counted
-                attn = logits.softmax(dim=-1).masked_fill(keys, 1.0 / config.N_TOKENS)
+                attn = self.attn_drop(logits.softmax(dim=-1)).masked_fill(
+                    keys, 1.0 / config.N_TOKENS)
         else:
             self.last_window = None
             self.last_mask = None
-            attn = logits.softmax(dim=-1)
+            attn = self.attn_drop(logits.softmax(dim=-1))
 
-        attn = self.attn_drop(attn)
         out = (attn @ v).transpose(1, 2).reshape(B, N, C)
         return self.proj_drop(self.proj(out))
 
     def extra_repr(self) -> str:
         return (f"window={self.cfg.window}, renormalise={self.cfg.renormalise!r}, "
-                f"score_frame={self.cfg.score_frame!r}")
+                f"score_frame={self.cfg.score_frame!r}, backward={self.cfg.backward!r}")
 
 
 class RSAHandle:
@@ -482,7 +564,8 @@ def installed_config(model: nn.Module) -> RSAConfig | None:
 def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool = True) -> dict:
     """Check the installed defense against the properties it is specified to have.
 
-    Five checks, in the manner of `hooks.verify_capture`:
+    Five asserted checks and one reported measurement, in the manner of
+    `hooks.verify_capture`:
 
     1. **Identity at window 0** - with masking off the wrapper reproduces the undefended
        logits exactly, so the re-implemented attention matches timm's arithmetic.
@@ -492,6 +575,10 @@ def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool 
     3. **CLS** - CLS is masked at no layer.
     4. **Per-layer independence** - the twelve layers do not all select the same window.
     5. **Gradient** - a gradient reaches the input through the defense.
+    6. **Which gradient** - the input gradients under `backward="intended"` and
+       `backward="released"` are compared and their cosine and sign disagreement are
+       returned. This is reported, not asserted: both are legitimate settings and the
+       point is that a run has to say which one it used. See `BACKWARDS`.
 
     Raises AssertionError naming the property that failed. Returns the measurements.
     """
@@ -517,10 +604,17 @@ def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool 
         wins = torch.stack([handle.windows()[i] for i in handle.layers])
         all_same = bool(all(torch.equal(wins[0], wins[i]) for i in range(len(wins))))
 
-    xg = x.clone().detach().requires_grad_(True)
-    with enable(model, cfg):
-        (grad,) = torch.autograd.grad(model(xg).sum(), xg)
+    grads = {}
+    for mode in BACKWARDS:
+        xg = x.clone().detach().requires_grad_(True)
+        with enable(model, replace(cfg, backward=mode)):
+            (grads[mode],) = torch.autograd.grad(model(xg).sum(), xg)
+    grad = grads[cfg.backward]
     grad_sum = grad.abs().sum().item()
+
+    gi, gr = grads["intended"].flatten(), grads["released"].flatten()
+    backward_cos = float(torch.nn.functional.cosine_similarity(gi, gr, dim=0))
+    backward_sign_disagreement = float((gi.sign() != gr.sign()).float().mean())
 
     if was_training:
         model.train()
@@ -535,6 +629,9 @@ def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool 
         "all_layers_same_window": all_same,
         "n_distinct_windows": len({tuple(r) for r in wins.reshape(-1, 2).tolist()}),
         "input_grad_abs_sum": grad_sum,
+        "backward": cfg.backward,
+        "backward_grad_cosine": backward_cos,
+        "backward_sign_disagreement": backward_sign_disagreement,
     }
 
     if verbose:
@@ -545,7 +642,9 @@ def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool 
         print(f"  3. CLS masked anywhere    : {cls_masked}")
         print(f"  4. distinct windows       : {out['n_distinct_windows']} over "
               f"{len(wins)} layers x {x.shape[0]} images")
-        print(f"  5. |d(sum logits)/dx|     : {grad_sum:.3e}")
+        print(f"  5. |d(sum logits)/dx|     : {grad_sum:.3e}   (backward={cfg.backward!r})")
+        print(f"  6. intended vs released dx: cosine {backward_cos:.4f}, "
+              f"{100 * backward_sign_disagreement:.1f}% of signs disagree")
 
     assert identity_err == 0.0, f"window 0 does not reproduce the undefended logits ({identity_err:.3e})"
     allowed = cfg.allowed_masked_counts

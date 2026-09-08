@@ -1,0 +1,38 @@
+# The environment the numbers in code/results/ are produced under.
+#
+# Install torch and torchvision from PyTorch's own index, because the pinned build
+# is CUDA-specific and PyPI carries a different one:
+#
+#   pip install -r requirements.txt \
+#       --extra-index-url https://download.pytorch.org/whl/cu118
+#
+# scripts/slurm/setup_env.sh installs the same set on the cluster and is the
+# authority there; this file exists so a cold start off the cluster does not have
+# to read a Slurm script to learn what to install.
+#
+# Why torch and timm are pinned rather than floated: an unpinned `pip install timm`
+# picked up 1.0.29 during cluster setup, whose `Block.forward()` passes attn_mask and
+# is_causal into the attention module. `rsa.RSAAttention.forward` predates that
+# signature, so every RSA-active forward pass raised TypeError. RSA also copies timm
+# internals and the fused-attention flag it disables is a timm detail, so the timm
+# version is part of the result, not part of the setup. `fyp/results.py` records it in
+# every record's `_meta` for exactly that reason.
+
+torch==2.7.0
+torchvision==0.22.0
+timm==1.0.15
+
+# NOT pinned to an exact version, and this is a gap rather than a decision. numpy was
+# installed unpinned by setup_env.sh, and the records written before 8 September 2026
+# do not carry its version, so the version the headline Gate A numbers were produced
+# under is not recoverable. The floor below is numpy 2.x, where `np.random.seed` and
+# `np.random.permutation` still route through the legacy RandomState stream that
+# `data.rsa_class_wnids` needs to reproduce the authors' class draw; that stream is a
+# documented compatibility guarantee, so the draw is stable across 2.x.
+#
+# Replace this with an exact pin the next time the cluster environment is rebuilt, and
+# record it from `pip freeze` rather than from memory.
+numpy>=2.0,<3
+
+# Notebooks only; not imported by fyp/ or scripts/, and no result depends on it.
+matplotlib>=3.8
