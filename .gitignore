@@ -5,10 +5,9 @@
 # result dump or a set of notes lands in the vault, and forgetting once publishes
 # it. This way anything new is private until it is named here.
 #
-# Tracked: the code, the bibliography, and the two files that describe them.
-# Untracked: the vault (papers, pdfs, reading notes, topics), the planning and
-# handoff documents, thesis drafts, diagnostic write-ups, cluster output and
-# every PDF.
+# Tracked: the code, bibliography, repository README, and one concise Gate A findings document.
+# Untracked: private correspondence, the literature vault, planning and handoff notes, thesis
+# drafts, audits, cluster output, active experiment records, superseded material, and every PDF.
 
 /*
 
@@ -17,6 +16,11 @@
 !/README.md
 !/refs.bib
 !/code/
+!/01_gate_a/
+
+# Only the concise findings are public. Detailed notes, chronology, and drafts remain private.
+01_gate_a/*
+!01_gate_a/GATE_A.md
 
 # Inside code/, the same split as before: source and run records are tracked,
 # downloaded data and generated figures are not.
@@ -30,12 +34,17 @@ code/data/*
 code/results/*
 !code/results/*.json
 
-# The reproduction sweeps are withheld until the model and class-subset control
-# closes. Last match wins in this file, so these lines must stay below the
-# allowlist above. The files exist locally; restore them by deleting this block.
+# Gate A generated many pilots and superseded sweeps. Publish only the four settled records.
+# Last match wins, so the exact negations must remain below the broad gate_a pattern.
 code/results/gate_a_*.json
+!code/results/gate_a_reference.json
+!code/results/gate_a_undefended.json
+!code/results/gate_a_bwdrel.json
+!code/results/gate_a_released.json
 code/results/table2_by_rule.json
 code/results/pilot20full_analysis.json
+code/results/pilot20fullb_analysis.json
+code/results/ref20b_analysis.json
 code/results/shards/
 
 # Model weights and experiment scratch.

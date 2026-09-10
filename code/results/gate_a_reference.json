@@ -1,0 +1,180 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-07T19:25:01+00:00",
+    "git_commit": null,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "SoC cluster: NVIDIA TITAN V",
+    "is_result": true,
+    "note": "merged from five per-size array tasks (job 827620); see sources"
+  },
+  "purpose": "Gate A - reproduce the ViT-small + RSA row of RSA Table 1",
+  "tag": "reference",
+  "settings": {
+    "sizes": [
+      10,
+      20,
+      30,
+      40,
+      50
+    ],
+    "renormalise": "uniform",
+    "window_rule": "ceil+1",
+    "score_frame": "global",
+    "n_images": 512,
+    "attack": "patch_autopgd(dlr)",
+    "steps": 100,
+    "init": "uniform",
+    "loc_stride": 1,
+    "location_grid": "range(0, 224 - size + 1, 20)"
+  },
+  "per_size": {
+    "10": {
+      "window": 2,
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 121,
+      "n_locations_full": 121,
+      "clean_acc_pct": 92.1875,
+      "clean_acc_reference_table2": 92.58,
+      "robust_acc_pct": 45.3125,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 83.2,
+      "undefended_reference_table1": 45.7,
+      "delta_vs_reference": -37.8875
+    },
+    "20": {
+      "window": 3,
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 121,
+      "n_locations_full": 121,
+      "clean_acc_pct": 91.796875,
+      "clean_acc_reference_table2": 90.43,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 72.46,
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": -72.46
+    },
+    "30": {
+      "window": 3,
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 100,
+      "n_locations_full": 100,
+      "clean_acc_pct": 91.796875,
+      "clean_acc_reference_table2": 90.43,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 68.55,
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": -68.55
+    },
+    "40": {
+      "window": 4,
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 100,
+      "n_locations_full": 100,
+      "clean_acc_pct": 88.8671875,
+      "clean_acc_reference_table2": 88.67,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 56.25,
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": -56.25
+    },
+    "50": {
+      "window": 5,
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 81,
+      "n_locations_full": 81,
+      "clean_acc_pct": 85.546875,
+      "clean_acc_reference_table2": 83.98,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 43.16,
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": -43.16
+    }
+  },
+  "hours": 22.091,
+  "partial": false,
+  "sources": [
+    {
+      "size": 10,
+      "file": "gate_a_reference_10px.json",
+      "device": "NVIDIA TITAN V",
+      "written_utc": "2026-09-07T19:16:16+00:00",
+      "git_commit": null,
+      "hours": 5.017
+    },
+    {
+      "size": 20,
+      "file": "gate_a_reference_20px.json",
+      "device": "NVIDIA TITAN V",
+      "written_utc": "2026-09-07T19:25:01+00:00",
+      "git_commit": null,
+      "hours": 5.163
+    },
+    {
+      "size": 30,
+      "file": "gate_a_reference_30px.json",
+      "device": "NVIDIA TITAN V",
+      "written_utc": "2026-09-07T18:24:05+00:00",
+      "git_commit": null,
+      "hours": 4.147
+    },
+    {
+      "size": 40,
+      "file": "gate_a_reference_40px.json",
+      "device": "NVIDIA TITAN V",
+      "written_utc": "2026-09-07T18:39:51+00:00",
+      "git_commit": null,
+      "hours": 4.41
+    },
+    {
+      "size": 50,
+      "file": "gate_a_reference_50px.json",
+      "device": "NVIDIA TITAN V",
+      "written_utc": "2026-09-07T17:36:36+00:00",
+      "git_commit": null,
+      "hours": 3.354
+    }
+  ],
+  "outcome": "Table 1 does not reproduce under the released implementation (window=ceil+1, score_frame=global, renormalise=uniform). Robust accuracy equals the undefended baseline at every patch size.",
+  "model_info": {
+    "model_name": "deit_small_patch16_224",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "depth": 12,
+    "num_heads": 6,
+    "head_dim": 64,
+    "scale": 0.125,
+    "embed_dim": 384,
+    "num_classes": 100,
+    "n_params_m": 21.7,
+    "fused_attn_disabled": 12,
+    "device": "cuda"
+  }
+}

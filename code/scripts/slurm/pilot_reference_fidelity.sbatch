@@ -61,7 +61,7 @@
 # Analyse with: python scripts/pilot_analysis.py --tag ref20b
 
 #
-# RERUN REQUIRED, 8 September 2026 — the sample was wrong.
+# RERUN REQUIRED, 8 September 2026 - the sample was wrong.
 #
 # This job passes --n-images 64. Until 8 September gate_a.py drew 512 indices, sorted
 # them, and took the first 64. eval_subset sorts, and ImageFolder orders by class

@@ -17,7 +17,7 @@
 *.sbatch  text eol=lf
 *.sh      text eol=lf
 
-# Binaries — never touch these
+# Binaries - never touch these
 *.pdf     binary
 *.docx    binary
 *.png     binary

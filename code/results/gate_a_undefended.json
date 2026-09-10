@@ -1,0 +1,191 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-08T10:52:46+00:00",
+    "git_commit": null,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 512,
+    "attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "device": "NVIDIA TITAN RTX, Tesla T4",
+    "is_result": true,
+    "note": "merged from 5 per-size array tasks (job 828478); see sources"
+  },
+  "purpose": "Gate A - reproduce the ViT-small + RSA row of RSA Table 1",
+  "tag": "undefended",
+  "settings": {
+    "sizes": [
+      10,
+      20,
+      30,
+      40,
+      50
+    ],
+    "defense": "none",
+    "renormalise": "uniform",
+    "window_rule": "ceil+1",
+    "score_frame": "global",
+    "n_images": 512,
+    "attack": "patch_autopgd(dlr)",
+    "steps": 100,
+    "init": "uniform",
+    "loc_stride": 1,
+    "location_grid": "range(0, 224 - size + 1, 20)"
+  },
+  "per_size": {
+    "10": {
+      "window": 0,
+      "defense": "none",
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 121,
+      "n_locations_full": 121,
+      "clean_acc_pct": 92.96875,
+      "clean_acc_reference_table2": 92.58,
+      "robust_acc_pct": 47.0703125,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 45.7,
+      "reference_row": "ViT-small",
+      "undefended_reference_table1": 45.7,
+      "delta_vs_reference": 1.3703124999999972
+    },
+    "20": {
+      "window": 0,
+      "defense": "none",
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 121,
+      "n_locations_full": 121,
+      "clean_acc_pct": 92.96875,
+      "clean_acc_reference_table2": 90.43,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 0.0,
+      "reference_row": "ViT-small",
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": 0.0
+    },
+    "30": {
+      "window": 0,
+      "defense": "none",
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 100,
+      "n_locations_full": 100,
+      "clean_acc_pct": 92.96875,
+      "clean_acc_reference_table2": 90.43,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 0.0,
+      "reference_row": "ViT-small",
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": 0.0
+    },
+    "40": {
+      "window": 0,
+      "defense": "none",
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 100,
+      "n_locations_full": 100,
+      "clean_acc_pct": 92.96875,
+      "clean_acc_reference_table2": 88.67,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 0.0,
+      "reference_row": "ViT-small",
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": 0.0
+    },
+    "50": {
+      "window": 0,
+      "defense": "none",
+      "renormalise": "uniform",
+      "window_rule": "ceil+1",
+      "score_frame": "global",
+      "n_locations": 81,
+      "n_locations_full": 81,
+      "clean_acc_pct": 92.96875,
+      "clean_acc_reference_table2": 83.98,
+      "robust_acc_pct": 0.0,
+      "robust_acc_counts_clean_errors_as_not_robust": true,
+      "robust_acc_reference_table1": 0.0,
+      "reference_row": "ViT-small",
+      "undefended_reference_table1": 0.0,
+      "delta_vs_reference": 0.0
+    }
+  },
+  "hours": 37.465,
+  "partial": false,
+  "sources": [
+    {
+      "size": 10,
+      "file": "gate_a_undefended_10px.json",
+      "device": "NVIDIA TITAN RTX",
+      "written_utc": "2026-09-08T05:14:15+00:00",
+      "git_commit": null,
+      "hours": 4.435
+    },
+    {
+      "size": 20,
+      "file": "gate_a_undefended_20px.json",
+      "device": "NVIDIA TITAN RTX",
+      "written_utc": "2026-09-08T05:18:49+00:00",
+      "git_commit": null,
+      "hours": 4.512
+    },
+    {
+      "size": 30,
+      "file": "gate_a_undefended_30px.json",
+      "device": "Tesla T4",
+      "written_utc": "2026-09-08T10:52:46+00:00",
+      "git_commit": null,
+      "hours": 10.078
+    },
+    {
+      "size": 40,
+      "file": "gate_a_undefended_40px.json",
+      "device": "Tesla T4",
+      "written_utc": "2026-09-08T10:49:33+00:00",
+      "git_commit": null,
+      "hours": 10.024
+    },
+    {
+      "size": 50,
+      "file": "gate_a_undefended_50px.json",
+      "device": "Tesla T4",
+      "written_utc": "2026-09-08T09:13:03+00:00",
+      "git_commit": null,
+      "hours": 8.416
+    }
+  ],
+  "model_info": {
+    "model_name": "deit_small_patch16_224",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "depth": 12,
+    "num_heads": 6,
+    "head_dim": 64,
+    "scale": 0.125,
+    "embed_dim": 384,
+    "num_classes": 100,
+    "n_params_m": 21.7,
+    "fused_attn_disabled": 12,
+    "device": "cuda"
+  },
+  "slurm_job": "828478"
+}
