@@ -12,9 +12,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-# --------------------------------------------------------------------------
-# Paths
-# --------------------------------------------------------------------------
 CODE_ROOT = Path(__file__).resolve().parent.parent
 VAULT_ROOT = CODE_ROOT.parent
 DATA_ROOT = Path(os.environ.get("FYP_DATA_ROOT", CODE_ROOT / "data"))
@@ -25,12 +22,7 @@ for _p in (DATA_ROOT, RESULTS_ROOT, FIGURES_ROOT):
     _p.mkdir(parents=True, exist_ok=True)
 
 
-# --------------------------------------------------------------------------
-# Model
-# --------------------------------------------------------------------------
-# RSA calls its model "ViT-small ... the DeiT-small model (Touvron et al. 2020)".
-# In timm that is `deit_small_patch16_224`: 22M params, 16x16 patches, 384-dim,
-# 6 heads, 12 blocks.
+# DeiT-small is the ViT-small architecture used by RSA.
 MODEL_NAME = "deit_small_patch16_224"
 
 IMAGE_SIZE = 224
@@ -41,9 +33,6 @@ N_TOKENS = N_IMAGE_TOKENS + 1            # 197, including the CLS token at index
 CLS_INDEX = 0
 
 
-# --------------------------------------------------------------------------
-# Scale
-# --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Scale:
     """Run size. `dev` uses Imagenette; `full` matches RSA's protocol."""
@@ -77,18 +66,12 @@ FULL = Scale(
     notes="Matches RSA's evaluation protocol. Needs the ImageNet-100 subset on disk.",
 )
 
-# Active scale.
 SCALE: Scale = FULL
 
 
-# --------------------------------------------------------------------------
-# Reproducibility
-# --------------------------------------------------------------------------
 SEED = 0
 
-# RSA says only "a random 100-class subset of ImageNet" and never publishes which
-# 100. The subset here is a seeded draw from the sorted wnid list, so clean accuracy
-# will differ from RSA's by a point or two because the classes differ.
+# Our class draw; the released RSA draw is available in data.rsa_class_wnids.
 CLASS_SUBSET_SEED = 1234
 N_CLASSES = 100
 
@@ -101,7 +84,9 @@ def seed_everything(seed: int = SEED) -> None:
 
 
 def get_device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    """Use CUDA only when a device is visible; otherwise use CPU."""
+    usable = torch.cuda.is_available() and torch.cuda.device_count() > 0
+    return torch.device("cuda" if usable else "cpu")
 
 
 def describe() -> str:

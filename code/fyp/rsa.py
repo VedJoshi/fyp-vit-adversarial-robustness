@@ -1,54 +1,12 @@
-"""RSA - Robust Self-Attention (Mu & Wagner, ICML 2021 UDL Workshop).
+"""RSA attention and masking variants (Mu & Wagner, 2021).
 
-RSA replaces the weighted mean at the heart of self-attention with a robust
-aggregation: at every layer it scores each value token by its distance from the mean
-image-token value, finds the highest-scoring sliding window, and neutralises that
-window before attention is applied. Their Algorithm 1, per attention layer::
+Scores value anomalies, selects tokens, and replaces their values with the
+image-token mean. CLS is never masked. Selection is discrete; gradients
+flow through the values and attention weights.
 
-    mu     <- MEAN_{i in N}(v_i)                 image tokens only, CLS excluded
-    s(w)   <- SUM_{i in w} ||v_i - mu||_2        for every window w in W
-    w*     <- ARGMAX_W s(w)
-    for i in w*:  v_i <- mu,  alpha_{.,i} <- 1/N
-    z_i    <- SUM_j alpha_{i,j} v_j
-
-The scoring half lives in `metrics`: `rsa_token_scores`, `rsa_window_scores`,
-`rsa_window_size`, `rsa_argmax_window`. This module supplies the masking, the
-per-layer replacement and the wiring.
-
-`enable(model, cfg)` swaps every block's `attn` for an `RSAAttention` holding the same
-parameters, so the model object is unchanged from the outside and `attacks.*`,
-`diagnostics.*` and `metrics.*` operate on it as they do on the undefended model::
-
-    with rsa.enable(clf, rsa.RSAConfig.for_patch(30)) as handle:
-        adv = attacks.patch_autopgd(clf, x, y, top=0, left=0, size=30)
-        acc = attacks.accuracy(clf, adv, y)
-
-Six properties of the implementation:
-
-1. **Per layer, independently.** Every block scores its own value tensor and masks its
-   own argmax window. The window is not computed once and reused.
-2. **CLS is excluded** from `mu` and from the scores, and is never masked. It stays
-   available as a key to every query.
-3. **Masked tokens are neutralised as keys and as values**, so they carry nothing
-   distinctive to any other token. They remain queries: their own output rows are
-   still computed from the surviving keys.
-4. **Four knobs are config flags.** The paper fixes none of the first three: the
-   window rule (`WINDOW_RULES`), what happens to a masked key's attention weight
-   (`RENORMALISATIONS`), and which mean the anomaly score is taken against
-   (`SCORE_FRAMES`). Each default is now the authors' released code rather than a
-   reading of the paper; the alternatives are kept so earlier runs stay reproducible
-   and so the spread across them can be measured. The fourth, `BACKWARDS`, picks which
-   *derivative* the masking step carries: the released code's repeated-index `scatter`
-   and this module's `torch.where` produce bit-identical forward tensors and different
-   gradients, so an attack is not the authors' attack unless it is also selected.
-   `RSAConfig.released(patch_px)` sets all four to the released reading at once.
-5. **The argmax is not differentiable.** The selection runs under `no_grad` and the
-   window index enters the graph only as a boolean mask. Gradients flow through the
-   surviving logits and values. Rung L4 of the attack ladder is what has to get
-   through the selection.
-6. **Fused attention stays off.** `RSAAttention` computes the attention matrix
-   explicitly, and `enable` calls `models.disable_fused_attention` so that
-   `hooks.AttentionCapture` keeps working on the defended model.
+Use enable(model, cfg) as a context manager to install and restore attention.
+The intended and released backward modes preserve the replacement values
+but give different gradients through their mean.
 """
 from __future__ import annotations
 
@@ -60,127 +18,37 @@ import torch.nn as nn
 
 from . import config, metrics, models
 
-#: How the attention weights of a masked key are handled. The paper sets
-#: `alpha_{.,i} <- 1/N` and is silent on what happens to the rest of the row.
-#:
-#: ``"softmax"``  the pre-softmax logits of masked keys are set to -inf, so softmax
-#:                renormalises the surviving entries and every row sums to 1.
-#: ``"zero"``     the post-softmax weights of masked keys are set to 0, so rows sum to
-#:                less than 1 and the block output loses that share of its magnitude.
-#: ``"uniform"``  the post-softmax weights of masked keys are set to `1/N_TOKENS`,
-#:                the paper's literal rule with CLS counted; rows sum to neither 1 nor
-#:                less than 1.
-#:
-#: Under ``"softmax"`` and ``"zero"`` the masked values carry zero weight, so
-#: `v_i <- mu` has no effect on the output; it is applied in every mode regardless.
-#:
-#: ``"uniform"`` is the default because it is what the authors' code does. At
-#: `pycls/models/vision_transformer.py:107` of wagner-group/robust-self-attention the
-#: masked key's column is scattered with `1 / context_length`, `context_length` being
-#: `num_patches ** 2 + 1` = 197, and the rows are not renormalised afterwards. The
-#: constant here is `config.N_TOKENS` to match, CLS included.
-#:
-#: Clean accuracy does not separate the three modes well enough to have settled this.
-#: Measured on 512 images, ``"zero"`` lands within 0.78 points of their Table 2 at
-#: every assumed patch size against 1.18 for ``"uniform"``, which is why ``"zero"``
-#: was the default before the reference code was available; ``"softmax"`` is 5.67 out,
-#: because renormalising the surviving row to sum to 1 removes most of the
-#: clean-accuracy cost the paper reports, giving 89.65% at 50px against their 83.98%.
-#: A 0.4-point difference in Table 2 fidelity is not evidence against the mode the
-#: authors actually ran. Record: `results/m5_rsa_sanity.json`.
+# Masked keys: zero drops their weight; softmax redistributes it; uniform sets 1/N.
 RENORMALISATIONS = ("zero", "softmax", "uniform")
 DEFAULT_RENORMALISATION = "uniform"
 
-#: Which mean the anomaly score is taken against. Defined in `metrics` beside the
-#: scoring function and named here so the defense's knobs sit together.
 SCORE_FRAMES = metrics.SCORE_FRAMES
 DEFAULT_SCORE_FRAME = metrics.DEFAULT_SCORE_FRAME
 
-#: Which set of windows the argmax ranges over, and what gets masked. The paper says
-#: the candidate set is "the set of windows covering unique sets of ViT patches" and
-#: gives the side as no formula at all, so more than one reading is consistent with it.
-#:
-#: ``"ceil+1"``  side ceil(p/16)+1, only windows wholly inside the grid. The first
-#:               reading implemented, and the one that matches their Table 2.
-#: ``"padded"``  same side, but the candidate set is every window *centred* on a token,
-#:               truncated at the grid edge. A clipped window still covers a unique set
-#:               of ViT patches, so the phrase admits it.
-#: ``"ceil"``    side ceil(p/16), wholly inside. The tight side; does not always contain
-#:               a patch that straddles a cell border.
-#: ``"multi"``   every shape in {c, c+1} x {c, c+1}, c = ceil(p/16), wholly inside,
-#:               ranked by average. Shapes now differ in size, so "average" and "sum"
-#:               stop agreeing and the prose's "average" is the reading taken.
-#: ``"token"``   the highest-scoring token, then the ceil+1 window containing it with
-#:               the highest average. From "select the image token with the greatest
-#:               overall anomaly score".
-#: ``"topk"``    no window: the k highest-scoring tokens masked individually, k the
-#:               ceil+1 window's area. From the paper's "Single suspicious token"
-#:               paragraph. Liu et al.'s Attention-Mask (ICML 2023) masks single
-#:               tokens the same way, but its threat model is a pixel-budgeted
-#:               attacker whose perturbation scatters across tokens, so it is a
-#:               separate defense rather than a reimplementation of RSA.
-#:
-#: ``"ceil+1"`` is the default because it is what the authors' code computes. At
-#: `pycls/models/vision_transformer.py:82-87` of wagner-group/robust-self-attention
-#: the side is `p // 16 + 1`, plus one more when `p % 16 > 1`, which is the exact
-#: worst case ceil((p + 15) / 16). That agrees with ceil(p/16) + 1 at every patch size
-#: except p = 1 (mod 16), and the paper uses none of those: at 10, 20, 30, 40 and 50px
-#: both give 2, 3, 3, 4, 5. Line 94 pools with `stride=1` and no padding, so the
-#: candidate set is the unpadded one and ``"padded"`` is ruled out too.
-#:
-#: The other five readings are kept because the spread across them is a result in its
-#: own right. The unpadded candidate set gives a corner token one candidate window
-#: against an interior token's nine, so a corner patch can never be centred. On one
-#: batch at 20px, with the patch re-optimised under each reading, ``"padded"`` takes a
-#: corner location from 6.25% to 50.00% robust, costs about one image at the interior
-#: and leaves clean accuracy at 93.75%. See `../../01_gate_a/gate-a-diagnosis.md`.
-#: ``"released"``  side `p // 16 + 1 (+1 if p % 16 > 1)`, the authors' own formula,
-#:                 transcribed at `metrics.rsa_window_size_released`. Identical to
-#:                 ``"ceil+1"`` at 10, 20, 30, 40 and 50 px and at every other size
-#:                 where `p % 16 != 1`; it exists so an exact-released control does not
-#:                 have to rely on that coincidence holding.
-WINDOW_RULES = ("ceil+1", "padded", "ceil", "multi", "token", "topk", "released")
+# ceil+1/released/ceil: mean-scored windows, differing in side formula.
+# padded: clipped edge windows; multi: mean-ranked variable shapes.
+# token: best mean window containing the peak; max: max-scored windows.
+# topk: individual tokens; centred: fixed block around the peak, shifted at edges.
+WINDOW_RULES = ("ceil+1", "padded", "ceil", "multi", "token", "topk", "released", "max",
+                "centred")
 DEFAULT_WINDOW_RULE = "ceil+1"
 
-#: Which derivative the masking step carries. The forward output is identical either
-#: way; only the gradient the attacker differentiates through differs.
-#:
-#: ``"intended"``  the natural derivative of the operator Algorithm 1 describes. The
-#:                 replacement is `torch.where(masked, mu, v)`, so a masked position
-#:                 passes its output gradient to `mu` once.
-#: ``"released"``  the derivative the authors' released code actually has. At
-#:                 `pycls/models/vision_transformer.py:101` of
-#:                 wagner-group/robust-self-attention the replacement is
-#:                 `v.scatter(-2, idx.repeat(1, H, context_length, D), v_mean)` with
-#:                 `v_mean = v_mean_head.repeat(1, 1, context_length, 1)`. The index
-#:                 tensor names the same target row `context_length` times, so the
-#:                 forward merely writes that row once, but autograd routes the output
-#:                 gradient back to every one of the 197 repeated source elements. The
-#:                 gradient reaching `mu` is therefore `config.N_TOKENS` times the
-#:                 intended one; the gradient reaching the unmasked values is the same.
-#:
-#: This is not a cosmetic difference. `attacks.patch_autopgd` takes `grad.sign()`, so
-#: the two settings send the attack in materially different directions: on random
-#: tensors at RSA's five patch sizes the input-gradient cosine is 0.21-0.45 and 34-38%
-#: of gradient signs disagree, while the forward tensors are bit-exact. Every result
-#: recorded before 8 September 2026 was produced under ``"intended"``, which is why
-#: that is still the default; ``"released"`` is what an "attacked the authors' released
-#: implementation" claim requires. `scripts/check_reference_fidelity.py` proves the
-#: two implementations agree forward and that ``"released"`` matches the literal
-#: scatter loop's gradient.
+WINDOW_POOL = {r: ("max" if r == "max" else "mean") for r in WINDOW_RULES}
+
+# Released scatter repeats each source N times, scaling only the mean-gradient path.
 BACKWARDS = ("intended", "released")
 DEFAULT_BACKWARD = "intended"
 
+# Force exact patch tokens or a maximum-coverage candidate window.
+ORACLE_MODES = ("extent", "window")
+
+
+# Centred sizing depends on the allowed offsets; off-grid use needs explicit sizing.
+LOCATION_STRIDE = 20
 
 @dataclass(frozen=True)
 class RSAConfig:
-    """The defense's hyperparameters.
-
-    `patch_px` is the patch size RSA assumes, which their threat model takes as known.
-    `window` is the resulting window side in tokens; `window = 0` disables masking, so
-    the wrapper reduces to ordinary attention and reproduces the undefended logits.
-    That is the `0px` column of their Table 2.
-    """
+    """Defense settings; patch_px is in pixels, window in tokens. Zero disables masking."""
 
     patch_px: int
     window: int
@@ -188,6 +56,8 @@ class RSAConfig:
     window_rule: str = DEFAULT_WINDOW_RULE
     score_frame: str = DEFAULT_SCORE_FRAME
     backward: str = DEFAULT_BACKWARD
+    # Blocks after k reuse block k's mask; None reselects at every block.
+    freeze_mask_after: int | None = None
 
     def __post_init__(self):
         if self.renormalise not in RENORMALISATIONS:
@@ -208,42 +78,44 @@ class RSAConfig:
             )
         if not 0 <= self.window <= config.GRID:
             raise ValueError(f"window {self.window} outside [0, {config.GRID}]")
+        if self.window_rule == "centred" and self.window > 0 and self.window % 2 == 0:
+            raise ValueError(
+                f"window_rule 'centred' needs an odd window so the block has a centre "
+                f"token; got {self.window}"
+            )
+        if self.freeze_mask_after is not None and self.freeze_mask_after < 0:
+            raise ValueError(
+                f"freeze_mask_after {self.freeze_mask_after} is negative; "
+                f"pass a block index or None"
+            )
 
     @classmethod
     def for_patch(cls, patch_px: int,
                   renormalise: str = DEFAULT_RENORMALISATION,
                   window_rule: str = DEFAULT_WINDOW_RULE,
                   score_frame: str = DEFAULT_SCORE_FRAME,
-                  backward: str = DEFAULT_BACKWARD) -> "RSAConfig":
-        """The config RSA uses against a `patch_px`-pixel patch.
-
-        `patch_px = 0` gives `window = 0`, which is no masking. Otherwise the window is
-        `metrics.rsa_window_size` under `window_rule`.
-        """
-        window = 0 if patch_px <= 0 else metrics.rsa_window_size(patch_px, rule=window_rule)
+                  backward: str = DEFAULT_BACKWARD,
+                  freeze_mask_after: int | None = None) -> "RSAConfig":
+        """Size the mask for patch_px; centred masks use the stride-20 grid guarantee."""
+        if patch_px <= 0:
+            window = 0
+        elif window_rule == "centred":
+            window = metrics.centred_block_side(patch_px, stride=LOCATION_STRIDE)
+        else:
+            window = metrics.rsa_window_size(patch_px, rule=window_rule)
         return cls(patch_px=patch_px, window=window, renormalise=renormalise,
-                   window_rule=window_rule, score_frame=score_frame, backward=backward)
+                   window_rule=window_rule, score_frame=score_frame, backward=backward,
+                   freeze_mask_after=freeze_mask_after)
 
     @classmethod
     def released(cls, patch_px: int) -> "RSAConfig":
-        """The config that reproduces the authors' released code, forward and backward.
-
-        Their window formula, their `1/197` renormalisation, their globally-centred
-        score, and their repeated-index `scatter` derivative. This is the setting an
-        "attacked RSA as released" claim needs; `for_patch` alone gives the operator
-        Algorithm 1 describes, which is forward-identical and backward-different.
-        """
+        """Match the released window formula, scoring, attention weights and derivative."""
         return cls.for_patch(patch_px, renormalise="uniform", window_rule="released",
                              score_frame="global", backward="released")
 
     @property
     def masked_tokens(self) -> int:
-        """The nominal number of image tokens the mask removes per layer.
-
-        Exact for `ceil+1`, `ceil`, `token` and `topk`. `padded` masks fewer at the grid
-        edge and `multi` masks whatever the winning shape holds, so use
-        `allowed_masked_counts` to check an observed count.
-        """
+        """Nominal mask area; padded and multi rules can mask fewer tokens."""
         return self.window * self.window
 
     @property
@@ -253,8 +125,6 @@ class RSAConfig:
         if w == 0:
             return frozenset({0})
         if self.window_rule == "padded":
-            # A window centred at the edge is truncated, so each side runs over the
-            # lengths a w-wide interval can have once clipped to [0, g).
             sides = {min(w, g) - d for d in range(w // 2 + 1)}
             sides = {s for s in sides if s > 0}
             return frozenset(a * b for a in sides for b in sides)
@@ -271,16 +141,15 @@ class RSAConfig:
             "window_rule": self.window_rule,
             "score_frame": self.score_frame,
             "backward": self.backward,
+            "freeze_mask_after": self.freeze_mask_after,
             "masked_tokens": self.masked_tokens,
         }
 
 
 class _ScaleGrad(torch.autograd.Function):
-    """Identity forward; multiplies the gradient by `scale` on the way back.
+    """Reproduce the repeated-scatter gradient without allocating repeated sources.
 
-    Reproduces what the released `scatter` does to the gradient of the replacement
-    mean without paying for `window^2` scatters of a (B, H, 197, 64) tensor per layer.
-    `check_reference_fidelity.py` pins it against the literal loop.
+    Forward is identity; backward scales only the replacement-mean path.
     """
 
     @staticmethod
@@ -294,18 +163,13 @@ class _ScaleGrad(torch.autograd.Function):
 
 
 class RSAAttention(nn.Module):
-    """One block's attention with RSA's robust aggregation in place of the mean.
+    """Reuse timm attention parameters with RSA masking.
 
-    Holds the wrapped `Attention`'s own submodules by reference, so it introduces no
-    parameters and `attn.qkv` remains the same Linear that `hooks.AttentionCapture`
-    hooks. Its forward is timm's explicit attention path with the masking inserted
-    between the logits and the softmax.
-
-    `last_window` is the (B, 2) grid position selected on the most recent forward
-    pass, and `last_mask` the (B, N) boolean key mask, both detached.
+    Detached diagnostics: last_window is (B, 2); last_mask is (B, N).
     """
 
-    def __init__(self, attn: nn.Module, cfg: RSAConfig):
+    def __init__(self, attn: nn.Module, cfg: RSAConfig,
+                 layer_idx: int = 0, shared: dict | None = None):
         super().__init__()
         self.qkv = attn.qkv
         self.q_norm = attn.q_norm
@@ -320,22 +184,47 @@ class RSAAttention(nn.Module):
         self.fused_attn = False
 
         self.cfg = cfg
+        self.layer_idx = layer_idx
+        # Shared only within this installation; the selected block refreshes it each pass.
+        self.shared = {} if shared is None else shared
         self.last_window: torch.Tensor | None = None
         self.last_mask: torch.Tensor | None = None
+        self.oracle_mask: torch.Tensor | None = None
 
     @torch.no_grad()
     def select(self, v: torch.Tensor) -> torch.Tensor:
-        """The window to mask, as a (B, N) boolean key mask with CLS always False.
+        """Return a detached (B, N) key mask, with CLS always False.
 
-        Runs under `no_grad`: the argmax is the defense's non-differentiable step and
-        nothing downstream of it needs a gradient with respect to the selection.
+        Oracle masks bypass scoring. With freeze_mask_after=k, later blocks reuse
+        block k's mask, refreshed on every forward pass.
         """
         B = v.shape[0]
+        if self.oracle_mask is not None:
+            mask = self.oracle_mask.to(v.device).expand(B, -1)
+            self.last_window = None
+            self.last_mask = mask
+            return mask
+
+        frozen = self.cfg.freeze_mask_after
+        if frozen is not None and self.layer_idx > frozen:
+            mask = self.shared.get("mask")
+            if mask is None:
+                raise RuntimeError(
+                    f"freeze_mask_after={frozen} but block {frozen} wrote no mask before "
+                    f"block {self.layer_idx} ran; is block {frozen} installed?"
+                )
+            if mask.shape[0] != B:
+                raise RuntimeError(
+                    f"frozen mask has batch {mask.shape[0]}, this pass has {B}"
+                )
+            self.last_window = self.shared.get("window")
+            self.last_mask = mask
+            return mask
+
         w, g, rule = self.cfg.window, config.GRID, self.cfg.window_rule
         scores = metrics.rsa_token_scores(v, frame=self.cfg.score_frame)  # (B, N_img)
 
         if rule == "topk":
-            # No window. The k most anomalous tokens are masked where they fall.
             k = min(w * w, scores.shape[1])
             idx = scores.topk(k, dim=1).indices                               # (B, k)
             flat = torch.zeros_like(scores, dtype=torch.bool)
@@ -355,6 +244,9 @@ class RSAAttention(nn.Module):
 
         self.last_window = rc
         self.last_mask = mask
+        if frozen is not None and self.layer_idx == frozen:
+            # Refresh on every forward pass, including each attack iterate.
+            self.shared["mask"], self.shared["window"] = mask, rc
         return mask
 
     def _window_corner(self, scores, w, g, rule):
@@ -362,7 +254,6 @@ class RSAAttention(nn.Module):
         B = scores.shape[0]
 
         if rule == "padded":
-            # Index i in the padded output is a window starting at grid coord i - lo.
             lo = (w - 1) // 2
             ws = metrics.rsa_window_scores(scores, w, padded=True)             # (B, G, G)
             rc = metrics.rsa_argmax_window(ws)
@@ -373,8 +264,6 @@ class RSAAttention(nn.Module):
             return r0, c0, r1 - r0, c1 - c0
 
         if rule == "multi":
-            # Shapes differ in size, so "average" and "sum" no longer agree and the
-            # ranking is by average across all of them. Each image picks its own shape.
             c = max(w - 1, 1)
             best_s = torch.full((B,), float("-inf"), device=scores.device)
             best_r = torch.zeros(B, dtype=torch.long, device=scores.device)
@@ -398,8 +287,14 @@ class RSAAttention(nn.Module):
                     best_s = torch.where(take, val, best_s)
             return best_r, best_c, best_h, best_w
 
+        if rule == "centred":
+            lo = (w - 1) // 2
+            tok = scores.argmax(1)
+            r0 = (tok // g - lo).clamp(0, g - w)
+            c0 = (tok % g - lo).clamp(0, g - w)
+            return r0, c0, w, w
+
         if rule == "token":
-            # The top token, then the best window containing it.
             ws = metrics.rsa_window_scores(scores, w)                          # (B, n, n)
             n = ws.shape[-1]
             tok = scores.argmax(1)
@@ -412,8 +307,7 @@ class RSAAttention(nn.Module):
             rc = metrics.rsa_argmax_window(masked)
             return rc[:, 0], rc[:, 1], w, w
 
-        # "ceil+1" and "ceil": one shape, windows wholly inside the grid.
-        ws = metrics.rsa_window_scores(scores, w)
+        ws = metrics.rsa_window_scores(scores, w, pool=WINDOW_POOL[rule])
         rc = metrics.rsa_argmax_window(ws)
         return rc[:, 0], rc[:, 1], w, w
 
@@ -434,11 +328,7 @@ class RSAAttention(nn.Module):
                 mu = _ScaleGrad.apply(mu, float(config.N_TOKENS))
             v = torch.where(values, mu.expand_as(v), v)
 
-            # Dropout before the overwrite, as upstream does at
-            # `vision_transformer.py:96-107`: softmax, attn_drop, then scatter. At
-            # evaluation p = 0 and the order cannot matter; in training mode it can,
-            # because dropping a masked column would otherwise scale 1/197 by 1/(1-p).
-            # The "softmax" mode masks pre-softmax and has no upstream counterpart.
+            # Match upstream ordering: dropout precedes the masked-column overwrite.
             if self.cfg.renormalise == "softmax":
                 attn = self.attn_drop(logits.masked_fill(keys, float("-inf")).softmax(dim=-1))
             elif self.cfg.renormalise == "zero":
@@ -457,6 +347,49 @@ class RSAAttention(nn.Module):
     def extra_repr(self) -> str:
         return (f"window={self.cfg.window}, renormalise={self.cfg.renormalise!r}, "
                 f"score_frame={self.cfg.score_frame!r}, backward={self.cfg.backward!r}")
+
+
+def _candidate_windows(rule: str, window: int,
+                       grid: int = config.GRID) -> list[tuple[int, int, int, int]]:
+    """Candidate (row, col, height, width) windows for the rule; topk has none."""
+    if rule == "topk":
+        raise ValueError("window_rule 'topk' masks single tokens and has no window set")
+    if rule == "padded":
+        lo = (window - 1) // 2
+        out = []
+        for i in range(grid):
+            for j in range(grid):
+                r0, c0 = max(i - lo, 0), max(j - lo, 0)
+                r1, c1 = min(i - lo + window, grid), min(j - lo + window, grid)
+                out.append((r0, c0, r1 - r0, c1 - c0))
+        return out
+    if rule == "multi":
+        c = max(window - 1, 1)
+        shapes = [(h, w) for h in (c, c + 1) for w in (c, c + 1) if h <= grid and w <= grid]
+    else:
+        shapes = [(window, window)]
+    return [(r, c, h, w) for h, w in shapes
+            for r in range(grid - h + 1) for c in range(grid - w + 1)]
+
+
+def oracle_window(top: int, left: int, size: int, window: int,
+                  window_rule: str = DEFAULT_WINDOW_RULE,
+                  grid: int = config.GRID) -> tuple[int, int, int, int]:
+    """Candidate window covering the most patch tokens.
+
+    Returns (row, col, height, width). Ties prefer lowest row, then column,
+    then smallest area. Full coverage is not guaranteed if the window is too small.
+    """
+    idx = metrics.patch_token_indices(top, left, size, grid=grid,
+                                      include_cls_offset=False)
+    cells = [(i // grid, i % grid) for i in idx]
+
+    def rank(win: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+        r, c, h, w = win
+        covered = sum(r <= pr < r + h and c <= pc < c + w for pr, pc in cells)
+        return (-covered, r, c, h * w)
+
+    return min(_candidate_windows(window_rule, window, grid), key=rank)
 
 
 class RSAHandle:
@@ -479,12 +412,41 @@ class RSAHandle:
         return [self.blocks[i].attn for i in self.layers]
 
     def set_config(self, cfg: RSAConfig | None = None, **changes) -> RSAConfig:
-        """Change the window or the renormalisation on every installed layer."""
+        """Update every installed layer and clear the previous frozen mask."""
         cfg = cfg if cfg is not None else replace(self.cfg, **changes)
         for m in self.modules:
             m.cfg = cfg
+            # Do not reuse a mask selected under the previous config.
+            m.shared.clear()
         self.cfg = cfg
         return cfg
+
+    def set_oracle(self, top: int, left: int, size: int, mode: str = "extent",
+                   device: torch.device | None = None) -> torch.Tensor:
+        """Install a (1, N) mask derived from the known patch location.
+
+        extent masks exactly the patch tokens; window chooses a maximum-coverage
+        candidate. Both retain the normal value-replacement step.
+        """
+        if mode not in ORACLE_MODES:
+            raise ValueError(f"unknown oracle mode {mode!r}; pick from {ORACLE_MODES}")
+        if mode == "extent":
+            idx = metrics.patch_token_indices(top, left, size)
+        else:
+            r, c, h, w = oracle_window(top, left, size, self.cfg.window,
+                                       self.cfg.window_rule)
+            idx = [1 + rr * config.GRID + cc
+                   for rr in range(r, r + h) for cc in range(c, c + w)]
+        mask = torch.zeros(1, config.N_TOKENS, dtype=torch.bool, device=device)
+        mask[0, idx] = True
+        for m in self.modules:
+            m.oracle_mask = mask
+        return mask
+
+    def clear_oracle(self) -> None:
+        """Restore score-based window selection on every layer."""
+        for m in self.modules:
+            m.oracle_mask = None
 
     def windows(self) -> dict[int, torch.Tensor]:
         """The (B, 2) window each layer selected on the most recent forward pass."""
@@ -528,22 +490,28 @@ def enable(
     cfg: RSAConfig,
     layers: Sequence[int] | None = None,
 ) -> RSAHandle:
-    """Install RSA on `model` in place and return the handle that reverts it.
+    """Install RSA in place; the returned context manager restores attention.
 
-    `layers` defaults to every block. RSA is specified as a drop-in replacement for
-    all of them, so a partial installation is a diagnostic rather than the defense.
+    layers defaults to all blocks. Partial installation is for diagnostics.
     """
     blocks = _blocks(model)
     chosen = list(range(len(blocks))) if layers is None else list(layers)
+    if cfg.freeze_mask_after is not None and cfg.freeze_mask_after not in chosen:
+        raise ValueError(
+            f"freeze_mask_after={cfg.freeze_mask_after} but that block is not installed; "
+            f"the blocks after it would have no mask to reuse"
+        )
 
     n_fused = models.disable_fused_attention(model)
     originals: dict[int, nn.Module] = {}
+    shared: dict = {}
     for i in chosen:
         attn = blocks[i].attn
         if isinstance(attn, RSAAttention):
             raise RuntimeError(f"layer {i} already has RSA installed; remove the old handle first")
         originals[i] = attn
-        blocks[i].attn = RSAAttention(attn, cfg).to(next(attn.parameters()).device)
+        blocks[i].attn = RSAAttention(attn, cfg, layer_idx=i, shared=shared).to(
+            next(attn.parameters()).device)
 
     return RSAHandle(blocks, originals, cfg, n_fused)
 
@@ -554,25 +522,9 @@ def is_enabled(model: nn.Module) -> bool:
 
 
 def verify(model: nn.Module, x: torch.Tensor, patch_px: int = 30, verbose: bool = True) -> dict:
-    """Check the installed defense against the properties it is specified to have.
+    """Check identity, mask sizes, CLS exclusion, layer selection and input gradients.
 
-    Five asserted checks and one reported measurement, in the manner of
-    `hooks.verify_capture`:
-
-    1. **Identity at window 0** - with masking off the wrapper reproduces the undefended
-       logits exactly, so the re-implemented attention matches timm's arithmetic.
-    2. **Mask size** - every layer masks a count the window rule allows. That is
-       `window^2` for most rules; `padded` masks fewer at the grid edge and `multi`
-       masks whatever its winning shape holds.
-    3. **CLS** - CLS is masked at no layer.
-    4. **Per-layer independence** - the twelve layers do not all select the same window.
-    5. **Gradient** - a gradient reaches the input through the defense.
-    6. **Which gradient** - the input gradients under `backward="intended"` and
-       `backward="released"` are compared and their cosine and sign disagreement are
-       returned. This is reported, not asserted: both are legitimate settings and the
-       point is that a run has to say which one it used. See `BACKWARDS`.
-
-    Raises AssertionError naming the property that failed. Returns the measurements.
+    Also report the difference between intended and released input gradients.
     """
     if is_enabled(model):
         raise RuntimeError("remove the existing RSA handle before verifying")

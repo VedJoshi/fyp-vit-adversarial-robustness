@@ -1,48 +1,17 @@
-"""Gate A - reproduce the `ViT-small + RSA` row of RSA's Table 1.
+"""Evaluate RSA over patch sizes and locations, with resumable progress.
 
-For each patch size, RSA is configured for that size (their threat model takes it as
-known), and `attacks.patch_autopgd` is driven over `attacks.patch_locations` against
-the defended model. An image counts as robust only if it survives every location.
+An image survives only if clean classification and every attacked location
+are correct. Each arm receives a separately optimised attack.
 
-The location loop is written out here rather than calling
-`attacks.worst_location_attack`, which carries the same rule -- an image is robust only
-if no location flipped it -- but holds its state in tensors and returns only at the end.
-This version records each location as it finishes, so a sweep measured in hours resumes
-after an interruption instead of restarting.
+--arm oracle_window supplies a maximum-coverage candidate window;
+oracle_extent supplies exactly the patch tokens. Both retain mean replacement
+and measure clean accuracy per location.
 
-Usage::
+--released selects the released derivative and attack settings; checkpoint
+and class draw remain separate inputs. Resume requires a matching fingerprint.
 
-    python scripts/gate_a.py --loc-stride 4 --n-images 128 --tag pilot   # ~4 h
-    python scripts/gate_a.py --tag full                                  # all five sizes
-    python scripts/gate_a.py --released --checkpoint vitsmall_100.pt --tag released
-
-The default is RSA's five patch sizes: 523 location-sweeps of 16 batches each. Measured
-with RSA active at 20.7 s per 100-step attack batch, that is 48.3 hours -- 11.2 h at 10px
-and 20px, 9.2 h at 30px and 40px, 7.5 h at 50px. Record: `results/m5_rsa_sanity.json`.
-
-`--loc-stride` keeps every n-th location, which weakens the worst-case search and so
-raises the reported robust accuracy: a pilot below the target is decisive, a pilot at
-or above it is not. `--n-images` draws a seeded random sample of that size; it is not a
-prefix of the 512-image sample, because `data.eval_subset` sorts its indices and a
-prefix of a sorted sample is a prefix of the class directories.
-
-**What this script defaults to is the RSA operator Algorithm 1 describes, not the code
-the authors released.** They are forward-identical and differ in four places that a
-Table 1 comparison has to control: the derivative of the masking step (`--backward`),
-the window-side formula (`--window-rule released`), the AutoPGD checkpoint spelling
-(`--schedule`) and the attack loop's batching and still-correct filtering
-(`--batch-size`, `--attack-survivors-only`). `--released` sets all of them together.
-Two more differences are not flags, because they are inputs: the authors' released
-checkpoint (`--checkpoint`) and their seed-0 class draw
-(`scripts/build_imagenet100.py` against `data.rsa_class_wnids()`). Until all six agree,
-the honest description of a result here is "the intended RSA operator", not "RSA as
-released".
-
-Progress is appended to `results/gate_a_<tag>.progress.jsonl` after every location and
-replayed on restart, so an interrupted sweep resumes where it stopped. Each size writes
-a protocol header first, carrying the clean errors and a fingerprint of everything the
-union depends on; a resume whose fingerprint differs is refused rather than silently
-pooled.
+    python scripts/gate_a.py --sizes 20 --n-images 128 --loc-stride 3 --tag pilot
+    python scripts/gate_a.py --tag full
 """
 from __future__ import annotations
 
@@ -59,12 +28,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import torch
 
 from fyp import attacks, config, data, models, results, rsa
+from checkpoint_control import NO_WINDOW_RANK, geometry
 
-#: RSA Table 1, row `ViT-small + RSA`, and row `ViT-small` for the undefended model.
 TABLE1_RSA = {10: 83.20, 20: 72.46, 30: 68.55, 40: 56.25, 50: 43.16}
 TABLE1_UNDEFENDED = {10: 45.70, 20: 0.00, 30: 0.00, 40: 0.00, 50: 0.00}
-#: RSA Table 2, row `ViT-small + RSA`: clean accuracy by assumed patch size.
 TABLE2_RSA = {0: 93.16, 10: 92.58, 20: 90.43, 30: 90.43, 40: 88.67, 50: 83.98}
+
+ORACLE_ARMS = {"oracle_window": "window", "oracle_extent": "extent"}
 
 
 def parse_args():
@@ -83,6 +53,16 @@ def parse_args():
     p.add_argument("--n-images", type=int, default=config.SCALE.n_eval_images)
     p.add_argument("--steps", type=int, default=config.SCALE.attack_steps)
     p.add_argument("--loc-stride", type=int, default=1, help="keep every n-th location")
+    p.add_argument("--record-geometry", action="store_true",
+                   help="also record where RSA's selection lands on the adversarial "
+                        "patch: per-layer token rank, patch-window rank and "
+                        "fully-masked rate, reduced over the location's images. "
+                        "Costs one extra forward pass per batch")
+    p.add_argument("--freeze-mask-after", type=int, default=None, metavar="K",
+                   help="blocks after K reuse block K's mask instead of selecting "
+                        "their own. Changes the defense, so the arm is attacked in its "
+                        "own right; the default reselects in every block, as RSA "
+                        "specifies")
     p.add_argument("--no-defense", action="store_true",
                    help="force the window to 0, which is ordinary attention: the "
                         "undefended baseline measured under this exact protocol")
@@ -108,6 +88,12 @@ def parse_args():
                    help="at each location attack only images not already broken, as "
                         "the authors' loop does. The union is unchanged; per-location "
                         "wrong lists stop being per-location robust accuracy")
+    p.add_argument("--arm", default="rsa", choices=("rsa", *ORACLE_ARMS),
+                   help="which half of the defense is under test. 'rsa' is the defense "
+                        "as specified. 'oracle_window' replaces the window argmax with "
+                        "the candidate window of --window-rule covering the most patch "
+                        "tokens, holding the extent at window^2. 'oracle_extent' masks "
+                        "exactly the tokens the patch intersects")
     p.add_argument("--released", action="store_true",
                    help="shorthand for the authors' released reading throughout: "
                         "--backward released --window-rule released --renorm uniform "
@@ -122,24 +108,80 @@ def parse_args():
         args.score_frame = "global"
         args.schedule = "released"
         args.attack_survivors_only = True
+    if args.record_geometry and args.window_rule in NO_WINDOW_RANK:
+        print(f"note: --window-rule {args.window_rule!r} has no square sliding candidate "
+              f"set, so geometry records token rank, full-mask rate and mask overlap "
+              f"and drops window rank and ties")
+    if args.arm != "rsa":
+        if args.no_defense:
+            p.error("--no-defense turns off the masking the oracle arms redirect; the "
+                    "two cannot be combined")
+        if args.attack_survivors_only:
+            p.error(
+                "the arms pair only when all three attack the same images at each "
+                "location, and --attack-survivors-only makes the attacked set depend on "
+                "the arm's own clean errors. Spell the released reading out instead: "
+                "--backward released --window-rule released --renorm uniform "
+                "--score-frame global --schedule released")
+        if args.arm == "oracle_window" and args.window_rule == "topk":
+            p.error("--window-rule topk masks single tokens and ranges over no window "
+                    "set, so there is no candidate window for oracle_window to pick")
     return args
+
+
+def paired_seed(size: int, top: int, left: int, offset: int) -> int:
+    """Seed by size, location and batch offset so arms and resumed runs share initial patches."""
+    digest = hashlib.sha1(
+        f"{config.SEED}:{size}:{top}:{left}:{offset}".encode()).hexdigest()
+    return int(digest[:8], 16)
+
+
+def reduce_geometry(batches: list[dict]) -> dict:
+    """Pool per-image geometry across batches before taking medians or percentages."""
+    n_layers = len(batches[0]["token_rank_by_layer"])
+    out: dict[str, list[float]] = {}
+    for src, dst, reduce_fn in (
+        ("token_rank_by_layer", "median_token_rank_by_layer",
+         lambda t: t.median().item()),
+        ("argmax_in_patch_by_layer", "argmax_in_patch_pct_by_layer",
+         lambda t: 100.0 * t.float().mean().item()),
+        ("tied_peak_tokens_by_layer", "median_tied_peak_tokens_by_layer",
+         lambda t: t.median().item()),
+        ("tied_peak_tokens_by_layer", "tied_peak_pct_by_layer",
+         lambda t: 100.0 * (t > 1).float().mean().item()),
+        ("window_rank_by_layer", "median_window_rank_by_layer",
+         lambda t: t.median().item()),
+        ("tied_windows_by_layer", "median_tied_windows_by_layer",
+         lambda t: t.median().item()),
+        ("full_mask_by_layer", "full_mask_pct_by_layer",
+         lambda t: 100.0 * t.float().mean().item()),
+        ("overlap_by_layer", "mean_overlap_pct_by_layer",
+         lambda t: 100.0 * t.mean().item()),
+    ):
+        if src not in batches[0]:
+            continue
+        out[dst] = [
+            reduce_fn(torch.cat([b[src][i] for b in batches]))
+            for i in range(n_layers)
+        ]
+    npt = batches[0]["n_patch_tokens"]
+    out["overlap_hist_by_layer"] = [
+        torch.bincount(
+            (torch.cat([b["overlap_by_layer"][i] for b in batches]) * npt).round().long(),
+            minlength=npt + 1,
+        ).tolist()
+        for i in range(n_layers)
+    ]
+    out["n_images"] = int(sum(b["token_rank_by_layer"][0].numel() for b in batches))
+    out["n_patch_tokens"] = batches[0]["n_patch_tokens"]
+    return out
 
 
 def protocol_fingerprint(args, cfg, n_images: int, batch_sizes: list[int],
                          class_draw: str, wnids: list[str]) -> dict:
-    """Everything that has to match for two runs to be poolable into one union.
-
-    Resume identity used to be `(size, top, left)` alone, so a tag rerun under a
-    different defense, window rule, score frame, checkpoint or class set skipped the
-    locations the first run had finished, folded their wrong-image sets into
-    `ever_wrong`, and then stamped the *current* flags on the record. The result was a
-    complete-looking robust accuracy that was a union across two different defenses.
-    `main` refuses to resume when this dict differs from the one in the progress file.
-
-    `wnids_sha1` pins the class identities themselves, not just the name of the draw.
-    """
+    """Settings that must match before resuming a sweep and unioning its failures."""
     return {
-        "defense": "none" if args.no_defense else "rsa",
+        "defense": "none" if args.no_defense else args.arm,
         "window": cfg.window,
         "window_rule": cfg.window_rule,
         "renormalise": cfg.renormalise,
@@ -153,33 +195,30 @@ def protocol_fingerprint(args, cfg, n_images: int, batch_sizes: list[int],
         "attack": f"patch_autopgd({args.loss})",
         "steps": args.steps,
         "init": args.init,
+        "init_rng": "paired_seed(seed, size, top, left, batch offset)",
         "schedule": args.schedule,
         "attack_survivors_only": args.attack_survivors_only,
         "batch_sizes": batch_sizes,
         "loc_stride": args.loc_stride,
+        "record_geometry": args.record_geometry,
+        # Omit unused freeze settings for compatibility with older fingerprints.
+        **({"freeze_mask_after": args.freeze_mask_after}
+           if args.freeze_mask_after is not None else {}),
     }
 
 
 def load_progress(path: Path):
-    """Replay the log.
+    """Replay progress into (done, clean_wrong, loc_clean, protocols).
 
-    Returns `(done, clean_wrong, protocols)`:
-
-    * `done`      `{(size, top, left): indices misclassified after the attack}`
-    * `clean_wrong` `{size: indices misclassified on the clean defended input}`
-    * `protocols` `{size: fingerprint}` for the protocol headers present
-
-    Location lines carry post-attack errors only. Without the clean errors beside them
-    a reader cannot reconstruct robust accuracy, because an image that is wrong clean
-    but happens to be *repaired* by the optimised patch is absent from `wrong` and looks
-    like a survivor. Runs before 8 September 2026 wrote no protocol or clean-error
-    header; they replay as before and `clean_wrong` is empty for them.
+    done and loc_clean use (size, top, left) keys; clean_wrong and protocols use
+    size keys. Oracle clean errors are location-specific. Legacy logs may lack them.
     """
     done: dict[tuple[int, int, int], list[int]] = {}
     clean_wrong: dict[int, list[int]] = {}
+    loc_clean: dict[tuple[int, int, int], list[int]] = {}
     protocols: dict[int, dict] = {}
     if not path.exists():
-        return done, clean_wrong, protocols
+        return done, clean_wrong, loc_clean, protocols
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -188,8 +227,11 @@ def load_progress(path: Path):
             clean_wrong[r["size"]] = r["clean_wrong"]
             protocols[r["size"]] = r["fingerprint"]
         else:
-            done[(r["size"], r["top"], r["left"])] = r["wrong"]
-    return done, clean_wrong, protocols
+            key = (r["size"], r["top"], r["left"])
+            done[key] = r["wrong"]
+            if "clean_wrong" in r:
+                loc_clean[key] = r["clean_wrong"]
+    return done, clean_wrong, loc_clean, protocols
 
 
 def main():
@@ -197,24 +239,19 @@ def main():
     sizes = [int(s) for s in args.sizes.split(",") if s.strip()]
     defense_note = " (undefended baseline)" if args.no_defense else ""
     rsa_state = "RSA off" if args.no_defense else "RSA active"
+    oracle = ORACLE_ARMS.get(args.arm)
 
     config.seed_everything()
     device = config.get_device()
     print(config.describe())
-    print(f"\ngate A{defense_note}: sizes {sizes}, window rule {args.window_rule!r}, "
+    print(f"\ngate A{defense_note}: arm {args.arm!r}, sizes {sizes}, window rule {args.window_rule!r}, "
           f"renormalise {args.renorm!r}, score frame {args.score_frame!r}, {args.steps}-step "
           f"patch_autopgd({args.loss}), {args.n_images} images, location stride {args.loc_stride}\n")
 
     ds, wnids, class_indices = data.build_dataset()
-    # Drawn at the size that gets measured. Taking the front of a 512-draw would hand a
-    # reduced run the lowest order statistics of a sorted sample, which is a prefix of
-    # the class directories rather than a random subsample. See `data.eval_subset`.
     sub = data.eval_subset(ds, args.n_images)
     loader = data.make_loader(sub)
 
-    # Which 100 classes are actually on disk, read from the data rather than inferred
-    # from the flags: the model and the class subset are independent variables of step
-    # 6h, and a record that names the wrong one is worse than one that names neither.
     if wnids == sorted(data.rsa_class_wnids()):
         class_draw = "rsa_seed0"
     elif wnids == sorted(data.imagenet100_wnids()):
@@ -262,16 +299,13 @@ def main():
     n = taken
     del xs, ys
 
-    # The batch split is a protocol variable, not an implementation detail: it decides
-    # how many patch initialisations come off the RNG stream and in what order, so two
-    # runs that differ only here can flip a borderline image. The authors' wrapper puts
-    # the whole 512-image sample through in one batch; `--batch-size` names ours.
     bs = args.batch_size or config.SCALE.batch_size
     batches = [(x_all[i:i + bs], y_all[i:i + bs]) for i in range(0, n, bs)]
+    # Batch offsets affect patch seeds and must be recorded for replay.
     batch_sizes = [len(y) for _, y in batches]
     print(f"{n} images in {len(batches)} batches of at most {bs}")
     progress_path = config.RESULTS_ROOT / f"gate_a_{args.tag}.progress.jsonl"
-    done, logged_clean_wrong, logged_protocols = load_progress(progress_path)
+    done, logged_clean_wrong, loc_clean, logged_protocols = load_progress(progress_path)
     if done:
         print(f"resuming: {len(done)} locations already recorded in {progress_path.name}")
         stale = [s for s in sizes if any(k[0] == s for k in done) and s not in logged_protocols]
@@ -292,27 +326,30 @@ def main():
                                      window_rule=args.window_rule,
                                      score_frame=args.score_frame,
                                      backward=args.backward)
+        if args.freeze_mask_after is not None:
+            cfg = replace(cfg, freeze_mask_after=args.freeze_mask_after)
         if args.no_defense:
-            # The patch size still drives the attack; only the defense goes away.
-            # `window = 0` is RSAConfig's documented no-masking case, so the wrapper
-            # stays installed and the forward path matches the defended sweeps.
             cfg = replace(cfg, window=0)
         locations = attacks.patch_locations(size)[:: args.loc_stride]
         print(f"\n--- {size}px patch, window {cfg.window}x{cfg.window}, "
               f"{len(locations)} of {len(attacks.patch_locations(size))} locations ---")
 
-        with rsa.enable(clf, cfg):
-            clean_ok = torch.cat([attacks.accuracy(clf, x, y) for x, y in batches])
-            clean_acc = 100.0 * float(clean_ok.float().mean())
-            print(f"clean accuracy, {rsa_state}: {clean_acc:.2f}%   "
-                  f"(RSA Table 2: {TABLE2_RSA.get(size, float('nan')):.2f})")
+        with rsa.enable(clf, cfg) as handle:
+            def clean_correct():
+                return torch.cat([attacks.accuracy(clf, x, y) for x, y in batches])
 
-            # Seeded from the clean predictions, not from zeros. An image RSA already
-            # misclassifies is not robust: the patch may hold the original pixels, so
-            # the clean image is a feasible attack point. Starting at zeros counts
-            # those images robust and inflates the number Gate A is compared against.
-            ever_wrong = ~clean_ok.to(device)
-            clean_wrong = (~clean_ok).nonzero(as_tuple=True)[0].tolist()
+            if oracle is None:
+                clean_ok = clean_correct()
+                clean_acc = 100.0 * float(clean_ok.float().mean())
+                clean_wrong = (~clean_ok).nonzero(as_tuple=True)[0].tolist()
+                print(f"clean accuracy, {rsa_state}: {clean_acc:.2f}%   "
+                      f"(RSA Table 2: {TABLE2_RSA.get(size, float('nan')):.2f})")
+                ever_wrong = ~clean_ok.to(device)
+            else:
+                clean_acc, clean_wrong = None, []
+                ever_wrong = torch.zeros(n, dtype=torch.bool, device=device)
+                print(f"clean accuracy, arm {args.arm!r}: measured at each location, "
+                      f"because the masked tokens move with the patch")
 
             fingerprint = protocol_fingerprint(args, cfg, n, batch_sizes,
                                                class_draw, wnids)
@@ -330,11 +367,6 @@ def main():
                     f"Use a new --tag."
                 )
             if size not in logged_protocols:
-                # Clean errors go in the log beside the attacked errors. The headline
-                # union seeds from them here, but a reader of the progress file cannot
-                # recover them from the location lines, so a per-location analysis
-                # counts a clean error that the optimised patch happens to repair as a
-                # survivor. See scripts/pilot_analysis.py.
                 with progress_path.open("a", encoding="utf-8") as fh:
                     fh.write(json.dumps({"record": "protocol", "size": size,
                                          "clean_wrong": clean_wrong,
@@ -352,58 +384,93 @@ def main():
                 if key in done:
                     continue
                 t0 = time.time()
-                # Which images this location attacks. `--attack-survivors-only` is the
-                # authors' loop: an image already broken at an earlier location cannot
-                # become robust again, so the union is identical, but the batches carry
-                # different images and consume the RNG differently. It also means the
-                # per-location `wrong` lists stop being per-location robust accuracy,
-                # which is why the fingerprint records it and pilot_analysis reads it.
+                geom_batches: list[dict] = []
+                loc_clean_wrong: list[int] = []
+                if oracle is not None:
+                    handle.set_oracle(top, left, size, mode=oracle, device=device)
+                    loc_clean_ok = clean_correct()
+                    loc_clean_wrong = (~loc_clean_ok).nonzero(as_tuple=True)[0].tolist()
+                    ever_wrong |= ~loc_clean_ok.to(device)
+
                 sel = ((~ever_wrong).nonzero(as_tuple=True)[0] if args.attack_survivors_only
                        else torch.arange(n, device=device))
                 wrong_idx = []
                 for s in range(0, len(sel), bs):
                     take = sel[s:s + bs]
+                    # Seed independently of completed locations so resume preserves initialization.
+                    config.seed_everything(paired_seed(size, top, left, s))
                     adv = attacks.patch_autopgd(clf, x_all[take], y_all[take],
                                                 top=top, left=left, size=size,
                                                 steps=args.steps, loss=args.loss,
                                                 init=args.init, schedule=args.schedule)
                     bad = ~attacks.accuracy(clf, adv, y_all[take])
                     wrong_idx += take[bad].tolist()
+                    if args.record_geometry:
+                        geom_batches.append(
+                            geometry(clf, handle, adv, y_all[take],
+                                     torch.ones_like(take, dtype=torch.bool),
+                                     top, left, cfg.window, size,
+                                     frame=args.score_frame,
+                                     padded=(args.window_rule == "padded"),
+                                     pool=rsa.WINDOW_POOL[args.window_rule],
+                                     window_rank=args.window_rule not in NO_WINDOW_RANK))
 
-                done[key] = wrong_idx
-                if wrong_idx:
-                    ever_wrong[torch.as_tensor(wrong_idx, device=device, dtype=torch.long)] = True
+                lost = sorted(set(wrong_idx) | set(loc_clean_wrong))
+                done[key] = lost
+                loc_clean[key] = loc_clean_wrong
+                if lost:
+                    ever_wrong[torch.as_tensor(lost, device=device, dtype=torch.long)] = True
+                loc_record = {"record": "location", "size": size,
+                              "top": top, "left": left,
+                              "n_attacked": len(sel),
+                              "clean_wrong": loc_clean_wrong,
+                              "wrong": lost}
+                if geom_batches:
+                    loc_record["geometry"] = reduce_geometry(geom_batches)
                 with progress_path.open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"record": "location", "size": size,
-                                         "top": top, "left": left,
-                                         "n_attacked": len(sel),
-                                         "wrong": wrong_idx}) + "\n")
+                    fh.write(json.dumps(loc_record) + "\n")
 
                 ra = 100.0 * float((~ever_wrong).float().mean())
                 dt = time.time() - t0
                 left_s = dt * (len(locations) - li)
+                clean_note = ("" if oracle is None
+                              else f" ({len(loc_clean_wrong):>3} of them wrong clean)")
                 print(f"  [{li:>3}/{len(locations)}] ({top:>3},{left:>3})  "
-                      f"{len(wrong_idx):>3} wrong here, worst-case RA so far {ra:6.2f}%  "
+                      f"{len(lost):>3} wrong here{clean_note}, "
+                      f"worst-case RA so far {ra:6.2f}%  "
                       f"{dt:5.1f}s  eta {left_s / 3600:.1f} h")
 
             robust_acc = 100.0 * float((~ever_wrong).float().mean())
+
+        if oracle is None:
+            clean_union = logged_clean_wrong.get(size, clean_wrong)
+            clean_acc_mean = clean_acc_min = clean_acc
+        else:
+            per_loc = [loc_clean.get((size, t, l), []) for t, l in locations]
+            clean_union = sorted({i for cw in per_loc for i in cw})
+            accs = [100.0 * (n - len(cw)) / n for cw in per_loc]
+            clean_acc_mean, clean_acc_min = sum(accs) / len(accs), min(accs)
+            print(f"clean accuracy over {len(locations)} locations: "
+                  f"mean {clean_acc_mean:.2f}%, worst {clean_acc_min:.2f}%, "
+                  f"{len(clean_union)} of {n} images wrong at some location")
 
         reference_row = "ViT-small" if args.no_defense else "ViT-small + RSA"
         target = (TABLE1_UNDEFENDED if args.no_defense else TABLE1_RSA).get(size)
         per_size[size] = {
             "window": cfg.window,
-            "defense": "none" if args.no_defense else "rsa",
+            "defense": "none" if args.no_defense else args.arm,
+            "arm": args.arm,
             "renormalise": args.renorm,
             "window_rule": args.window_rule,
             "score_frame": args.score_frame,
             "backward": cfg.backward,
-            # What the locations in this size's union were actually produced under,
-            # replayed from the progress file rather than restated from the flags.
             "protocol_fingerprint": logged_protocols[size],
-            "n_clean_errors": len(logged_clean_wrong.get(size, clean_wrong)),
+            "n_clean_errors": len(clean_union),
             "n_locations": len(locations),
             "n_locations_full": len(attacks.patch_locations(size)),
-            "clean_acc_pct": clean_acc,
+            "clean_acc_pct": clean_acc_mean,
+            "clean_acc_min_pct": clean_acc_min,
+            "clean_measured_per_location": oracle is not None,
             "clean_acc_reference_table2": TABLE2_RSA.get(size),
             "robust_acc_pct": robust_acc,
             "robust_acc_counts_clean_errors_as_not_robust": True,
@@ -424,10 +491,18 @@ def main():
     print(f"\ntotal {elapsed / 3600:.2f} h")
 
     payload = {
-        "purpose": "Gate A - reproduce the ViT-small + RSA row of RSA Table 1",
+        "purpose": (
+            "Gate A - reproduce the ViT-small + RSA row of RSA Table 1"
+            if args.arm == "rsa" else
+            f"Gate A, arm {args.arm}: RSA's token scoring and window argmax replaced by "
+            f"the patch location. A near-zero result establishes that perfect "
+            f"localisation does not rescue RSA's mean-replacement rule; it says nothing "
+            f"about a different replacement rule, aggregation, architecture or training"
+        ),
         "tag": args.tag,
         "settings": {
-            "sizes": sizes, "defense": "none" if args.no_defense else "rsa",
+            "sizes": sizes, "defense": "none" if args.no_defense else args.arm,
+            "arm": args.arm,
             "renormalise": args.renorm,
             "window_rule": args.window_rule, "score_frame": args.score_frame,
             "backward": args.backward,
@@ -437,6 +512,7 @@ def main():
             "batch_sizes": batch_sizes,
             "attack_survivors_only": args.attack_survivors_only,
             "released_reading": args.released,
+            "record_geometry": args.record_geometry,
             "loc_stride": args.loc_stride, "location_grid": "range(0, 224 - size + 1, 20)",
             "checkpoint": args.checkpoint,
             "class_draw": class_draw,

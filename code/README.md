@@ -151,6 +151,27 @@ python scripts/aas_efficacy.py --help
 python scripts/logit_gap_by_model.py --help
 python scripts/compare_runs.py --help
 python scripts/merge_shards.py --help
+python scripts/transfer_attack.py --help
+```
+
+`transfer_attack.py` generates patches under one defense and evaluates them unchanged under
+another. `--source self` checks replay; `--source selection` attacks the target directly with
+the selection-aware objective. `--combine` unions failures with the target's recorded sweep.
+
+`compare_runs.py` matches image identities across sample sizes and rejects different seeds or
+class draws. Use `--common-locations` to compare runs on their shared location grid.
+
+The self-checks need no pretrained weights or dataset:
+
+```bash
+python scripts/check_reference_fidelity.py   # fyp.rsa against the released implementation
+python scripts/check_oracle.py               # the oracle arms, and cross-sample matching
+python scripts/check_centred_rule.py         # the centred block rule and its guarantee
+python scripts/check_transfer.py             # transfer and union checks
+python scripts/check_selection.py            # selection geometry and gradients
+python scripts/check_max_rule.py             # max pooling and the candidate set
+python scripts/check_pool_diagnostics.py     # tie counting and the frozen mask
+python scripts/check_geometry.py             # the geometry instrument
 ```
 
 The notebooks cover the baseline model, attack implementations, and attention instrumentation:

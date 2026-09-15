@@ -1,28 +1,4 @@
-"""Step 6h: does RSA's own checkpoint change the defense's value-space geometry?
-
-    python code/scripts/checkpoint_control.py --model ours
-    python code/scripts/checkpoint_control.py --model rsa --checkpoint data/vitsmall_100.pt
-
-Two stages, both cheap, run under identical code on either model so the outputs are
-directly comparable.
-
-**Stage 1, the clean-accuracy gate.** Loads the model, reports state-dict key
-agreement, and measures clean accuracy over the evaluation sample. RSA report 93.16%
-undefended. A model that misses that by more than a few points is loaded wrongly, and
-nothing after it means anything.
-
-**Stage 2, the value-space geometry.** RSA ranks tokens by `a_i = ||v_i - mu||_2` and
-masks the argmax window, so the checkpoint can only matter through that geometry. At
-20px, at one location where the patch owns a token cell outright and one where it
-straddles, against a 100-step PatchAutoPGD patch, this records per layer: the median
-rank of the best patch token among the 196 image tokens, the median rank of the best
-patch-containing window among all windows, and the rate at which the selected window
-fully contains the patch.
-
-If their checkpoint gives the same ranking behaviour as this project's, the checkpoint
-cannot explain the Gate A gap, and the five-size sweep under their weights is not worth
-its GPU-hours. If it differs, the sweep is the next job.
-"""
+"""Compare checkpoint clean accuracy and per-layer patch-selection geometry."""
 import argparse
 import json
 import sys
@@ -35,8 +11,6 @@ import torch  # noqa: E402
 from fyp import attacks, config, data, metrics, models, results, rsa  # noqa: E402
 
 SIZE = 20
-#: A 20px patch owns a token cell outright at offset 0 and straddles two at offset 20
-#: (§5.4). Both are locations RSA's own stride-20 grid visits.
 LOCATIONS = [(0, 0), (20, 20)]
 RSA_CLEAN_REFERENCE = 93.16
 
@@ -54,11 +28,27 @@ def parse_args():
     return p.parse_args()
 
 
-def geometry(clf, handle, adv, y, clean_ok, top, left, window):
-    """Returns per-layer token rank, window rank and full-mask rate for one batch.
+# These rules do not rank one square sliding-window candidate set.
+NO_WINDOW_RANK = ("multi", "token", "topk", "centred")
 
-    Ranks are medians over images, 1 being the most anomalous. The patch-containing
-    window is the best over every window that fully covers the patch's cell extent.
+
+def centred_contains(scores, side, grid, r0, r1, c0, c1):
+    """Whether the actual centred rule covers inclusive token bounds r0:r1, c0:c1."""
+    br, bc, _, _ = rsa.RSAAttention._window_corner(None, scores, side, grid, "centred")
+    return (br <= r0) & (br + side - 1 >= r1) & (bc <= c0) & (bc + side - 1 >= c1)
+
+
+def geometry(clf, handle, adv, y, clean_ok, top, left, window, size=SIZE,
+             frame=metrics.DEFAULT_SCORE_FRAME, padded=False, pool="mean",
+             window_rank=True, centred_sides=()):
+    """Per-image ranks, peak membership and mask coverage; one (B,) tensor per layer.
+
+    frame, padded and pool must match the defense. Disable window_rank for
+    rules in NO_WINDOW_RANK. Rank counts strictly higher scores, so rank 1
+    does not imply peak membership under ties.
+
+    centred_sides adds counterfactual reselection coverage; after a frozen block
+    this can differ from the actual mask. Callers pool batches before taking medians.
     """
     captured = {}
     hooks = [
@@ -76,11 +66,11 @@ def geometry(clf, handle, adv, y, clean_ok, top, left, window):
     robust = 100 * (ok & clean_ok).float().mean().item()
 
     grid = config.GRID
-    patch_tokens = metrics.patch_token_indices(top, left, SIZE)
+    patch_tokens = metrics.patch_token_indices(top, left, size)
     patch_cells = [t - 1 for t in patch_tokens]
     r0, c0 = top // config.PATCH_SIZE, left // config.PATCH_SIZE
-    r1 = (top + SIZE - 1) // config.PATCH_SIZE
-    c1 = (left + SIZE - 1) // config.PATCH_SIZE
+    r1 = (top + size - 1) // config.PATCH_SIZE
+    c1 = (left + size - 1) // config.PATCH_SIZE
     covering = [
         (r, c)
         for r in range(grid - window + 1)
@@ -88,26 +78,48 @@ def geometry(clf, handle, adv, y, clean_ok, top, left, window):
         if r <= r0 and r + window - 1 >= r1 and c <= c0 and c + window - 1 >= c1
     ]
 
-    token_rank, window_rank, full_mask = [], [], []
+    token_rank, win_rank, full_mask, overlap, ties = [], [], [], [], []
+    argmax_hit, peak_ties = [], []
+    centred_hit = {s: [] for s in centred_sides}
     for i, m in zip(handle.layers, handle.modules):
         xin = captured[i]
         b, n, _ = xin.shape
         with torch.no_grad():
             qkv = m.qkv(xin).reshape(b, n, 3, m.num_heads, m.head_dim).permute(2, 0, 3, 1, 4)
-            tok = metrics.rsa_token_scores(qkv[2])
-            win = metrics.rsa_window_scores(tok, window)
+            tok = metrics.rsa_token_scores(qkv[2], frame=frame)
+            win = (metrics.rsa_window_scores(tok, window, padded=padded, pool=pool)
+                   if window_rank else None)
         best_token = tok[:, patch_cells].amax(1)
-        token_rank.append((tok > best_token[:, None]).sum(1).float().median().item() + 1)
-        best_window = torch.stack([win[:, r, c] for (r, c) in covering], 1).amax(1)
-        window_rank.append((win.flatten(1) > best_window[:, None]).sum(1).float().median().item() + 1)
-        full_mask.append(100 * m.last_mask[:, patch_tokens].all(1).float().mean().item())
+        token_rank.append((tok > best_token[:, None]).sum(1).float() + 1)
+        cells = torch.as_tensor(patch_cells, device=tok.device)
+        argmax_hit.append((tok.argmax(1)[:, None] == cells[None, :]).any(1))
+        peak_ties.append((tok == tok.amax(1, keepdim=True)).sum(1).float())
+        for s in centred_sides:
+            centred_hit[s].append(centred_contains(tok, s, grid, r0, r1, c0, c1))
+        if window_rank:
+            flat = win.flatten(1)
+            best_window = torch.stack([win[:, r, c] for (r, c) in covering], 1).amax(1)
+            win_rank.append((flat > best_window[:, None]).sum(1).float() + 1)
+            ties.append(metrics.rsa_tied_windows(win).float())
+        hit = m.last_mask[:, patch_tokens]
+        full_mask.append(hit.all(1))
+        overlap.append(hit.float().mean(1))
 
-    return {
+    out = {
         "robust_acc_pct": robust,
-        "median_token_rank_by_layer": token_rank,
-        "median_window_rank_by_layer": window_rank,
-        "full_mask_pct_by_layer": full_mask,
+        "token_rank_by_layer": token_rank,
+        "argmax_in_patch_by_layer": argmax_hit,
+        "tied_peak_tokens_by_layer": peak_ties,
+        "full_mask_by_layer": full_mask,
+        "overlap_by_layer": overlap,
+        "n_patch_tokens": len(patch_tokens),
     }
+    if window_rank:
+        out["window_rank_by_layer"] = win_rank
+        out["tied_windows_by_layer"] = ties
+    for s in centred_sides:
+        out[f"centred_contain_{s}_by_layer"] = centred_hit[s]
+    return out
 
 
 def main():
@@ -117,7 +129,6 @@ def main():
     device = config.get_device()
     print(config.describe())
 
-    # ---- stage 1: load and gate ------------------------------------------------
     if args.model == "rsa":
         if not args.checkpoint:
             raise SystemExit("--model rsa requires --checkpoint")
@@ -132,11 +143,7 @@ def main():
         wnids_expected = data.imagenet100_wnids()
         clf, info = None, None
 
-    # Fatal for their checkpoint, a warning for ours. Their head is ordered by their
-    # seed-0 wnid list, so a different directory silently scores every image against the
-    # wrong class while clean accuracy stays plausible and the 5-point gate still passes.
-    # Ours is head-sliced from the directory itself, so a mismatch there is a comparison
-    # problem rather than a labelling one.
+    # The released checkpoint requires its original class order; ours slices the head.
     ds, wnids, class_indices = data.build_dataset(
         expect_wnids=wnids_expected if args.model == "rsa" else None)
     if wnids != sorted(wnids_expected):
@@ -149,8 +156,6 @@ def main():
     if args.model == "ours":
         clf, info = models.load_model(class_indices=class_indices, device=device)
 
-    # Drawn at `--n-images`, not sliced from a 512-draw: sorted indices make a prefix
-    # the lowest order statistics of the sample. See `data.eval_subset`.
     sub = data.eval_subset(ds, args.n_images)
     loader = data.make_loader(sub, batch_size=args.n_images)
     x, y = next(iter(loader))
@@ -163,7 +168,6 @@ def main():
     if abs(clean_pct - RSA_CLEAN_REFERENCE) > 5:
         print("  GATE FAILED by more than 5 points. Stop and check the load path.")
 
-    # ---- stage 2: value-space geometry ----------------------------------------
     record = {
         "purpose": "step 6h: whether RSA's checkpoint changes the value-space geometry",
         "tag": tag,
@@ -194,6 +198,14 @@ def main():
             adv = attacks.patch_autopgd(clf, x, y, top=top, left=left,
                                         size=SIZE, steps=args.steps)
             g = geometry(clf, handle, adv, y, clean_ok, top, left, cfg.window)
+            g = {
+                "robust_acc_pct": g["robust_acc_pct"],
+                "median_token_rank_by_layer": [t.median().item() for t in g["token_rank_by_layer"]],
+                "median_window_rank_by_layer": [t.median().item() for t in g["window_rank_by_layer"]],
+                "full_mask_pct_by_layer": [100 * t.float().mean().item() for t in g["full_mask_by_layer"]],
+                "mean_overlap_pct_by_layer": [100 * t.mean().item() for t in g["overlap_by_layer"]],
+                "n_patch_tokens": g["n_patch_tokens"],
+            }
         print(f"  ({time.time() - t0:.0f}s) robust {g['robust_acc_pct']:.2f}%")
         print("  token rank  : " + " ".join(f"{r:4.0f}" for r in g["median_token_rank_by_layer"]))
         print("  window rank : " + " ".join(f"{r:4.0f}" for r in g["median_window_rank_by_layer"]))

@@ -1,32 +1,7 @@
-"""Run Athalye's warning signs at `FULL` in either threat model and record the result.
+"""Run and save warning-sign checks for linf, patch, or both threat models.
 
-The notebooks run these too. This script exists so the two `FULL` records can be
-regenerated without opening a notebook, which matters whenever the scoring convention
-changes and every recorded number has to move with it.
-
-    linf   -> `diagnostics.warning_signs`, PGD over an eps ladder.
-              Rewrites the `athalye_warning_signs` block of `results/m2_attacks.json`
-              and leaves the rest of that record alone.
-    patch  -> `diagnostics.patch_warning_signs` driven by `attacks.patch_autopgd`,
-              over a patch-size ladder. Writes `results/m4_patch_warning_signs.json`.
-
-`--defense rsa` installs RSA for the whole run at one fixed config, taken from
-`--patch-px`. The config is fixed rather than following the size sweep because sign 5
-asks whether robust accuracy falls as the attacker's budget grows against a **fixed**
-defense; re-tuning the window per size would change the defense and the attacker's
-budget together, and the monotonicity premise would not apply. `--backward` selects
-which derivative the attack differentiates through, so the same defense can be measured
-under both. `--out` names the record, so the two runs do not overwrite each other.
-
-Both run over `config.SCALE.n_mechanism_images` images at `config.SCALE.attack_steps`.
-At `FULL` that is 256 images at 100 steps: about 18 minutes for `linf` and 15 for
-`patch` on a 6 GB laptop GPU.
-
-Usage::
-
-    python scripts/warning_signs.py --threat linf
-    python scripts/warning_signs.py --threat patch
-    python scripts/warning_signs.py --threat both
+Keep the defense fixed as the attack budget changes. --patch-px sets its
+mask size; --backward selects the derivative and --out names the record.
 """
 from __future__ import annotations
 
@@ -57,6 +32,9 @@ def parse_args():
     p.add_argument("--renorm", default="uniform", choices=rsa.RENORMALISATIONS)
     p.add_argument("--window-rule", default="ceil+1", choices=rsa.WINDOW_RULES)
     p.add_argument("--score-frame", default="global", choices=rsa.SCORE_FRAMES)
+    p.add_argument("--freeze-mask-after", type=int, default=None, metavar="K",
+                   help="blocks after K reuse block K's mask; omit for the unfrozen "
+                        "defense. Required to point this battery at a frozen arm")
     p.add_argument("--out", default="m4_patch_warning_signs",
                    help="record name under results/")
     return p.parse_args()
@@ -78,9 +56,6 @@ def main():
     n_total = n_batches * config.SCALE.batch_size
 
     def batches():
-        # A fresh loader per run, so each threat model sees the same images. The draw
-        # is at `n_total`, not the front of a 512-draw: sorted indices make a prefix the
-        # lowest order statistics of the sample, which over-represents early wnids.
         return islice(data.make_loader(data.eval_subset(ds, n_total)), n_batches)
 
     if args.threat in ("linf", "both"):
@@ -100,7 +75,8 @@ def main():
             cfg = rsa.RSAConfig.for_patch(args.patch_px, renormalise=args.renorm,
                                           window_rule=args.window_rule,
                                           score_frame=args.score_frame,
-                                          backward=args.backward)
+                                          backward=args.backward,
+                                          freeze_mask_after=args.freeze_mask_after)
             print(f"RSA active, fixed for the run: {cfg}\n")
             defense = rsa.enable(clf, cfg)
         else:

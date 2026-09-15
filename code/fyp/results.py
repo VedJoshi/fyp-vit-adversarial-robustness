@@ -1,24 +1,4 @@
-"""Write a notebook's headline numbers to `results/<name>.json`.
-
-These files are tracked by git; `results/figures/` is not. See the negations at the
-bottom of `.gitignore`.
-
-Each record carries a `_meta` block with the scale, dataset, model, seed, torch and timm
-versions, device, git commit and dirty state the numbers were produced under, and an
-`is_result` flag.
-
-**The runner declares its own scale.** `n_eval_images` and `attack_steps` are arguments
-to `save`, not constants read from `config.SCALE`, and `is_result` is true only when the
-runner passes both and both reach `FULL`. Reading them from the module-level scale made
-`_meta` describe the scale the process was configured at rather than the run that
-happened.
-
-Usage::
-
-    from fyp import results
-    results.save("m1_baseline", {"clean_acc": 99.8, ...},
-                 n_eval_images=n, attack_steps=args.steps)
-"""
+"""Save result JSON with run settings and software provenance."""
 from __future__ import annotations
 
 import json
@@ -43,12 +23,7 @@ def _git_commit() -> str | None:
 
 
 def _git_dirty() -> bool | None:
-    """Whether the tree has uncommitted changes; None if git is unavailable.
-
-    A commit hash alone does not identify the source a number came from: the headline
-    Gate A records were produced from a copied cluster tree with no `.git` at all, and
-    a dirty tree with a clean-looking hash is the same problem in a quieter form.
-    """
+    """Whether tracked or untracked changes exist; None if git is unavailable."""
     try:
         out = subprocess.run(
             ["git", "status", "--porcelain"],
@@ -86,29 +61,10 @@ def _jsonify(obj: Any) -> Any:
 
 
 def header(n_eval_images: int | None = None, attack_steps: int | None = None) -> dict:
-    """The `_meta` block stamped onto every record.
+    """Build metadata using the sample size and steps declared by the runner.
 
-    `n_eval_images` and `attack_steps` describe *this run* and must be passed by the
-    runner. They used to be read from `config.SCALE`, which describes the scale the
-    module was imported at, not what the runner did: a one-image smoke test under
-    `FULL` was stamped `n_eval_images: 512`, `attack_steps: 100`, `is_result: true`.
-    `m2_attacks.json` carries exactly that - meta 512/100 over core attacks that ran on
-    32 images. The payloads were right and the provenance was fiction.
-
-    Omitting them now records `null` rather than a scale constant. A record that cannot
-    say what it measured says nothing instead of saying the wrong thing.
-    `attack_steps=None` is legitimate for a measurement that runs no attack;
-    `n_eval_images=None` is not, and demotes the record.
-
-    **`is_result` and `full_sample` are separate questions.** `is_result` asks whether
-    this ran on the real dataset and model with honest provenance. `full_sample` asks
-    whether it used the whole evaluation sample. Several measurements are legitimately
-    small by design - `validate_patch_fool` and `checkpoint_control` run one 32-image
-    batch, and say so in their own docstrings - so collapsing the two would label a real
-    validation "DEV - not a result", which is exactly the kind of wrong header this
-    change exists to stop. The audit's complaint was that a one-image run *claimed* 512,
-    not that a 32-image run cannot be a measurement. Both flags are recorded, the sample
-    size sits beside them, and the reader judges.
+    is_result identifies a FULL-scale run with a declared sample; full_sample
+    checks whether its sample and attack steps meet the configured protocol.
     """
     import torch
 
@@ -132,10 +88,9 @@ def header(n_eval_images: int | None = None, attack_steps: int | None = None) ->
         "scale_attack_steps": config.SCALE.attack_steps,
         "seed": config.SEED,
         "torch": torch.__version__,
-        # RSA copies timm internals (`fyp/rsa.py`) and fused-attention behaviour depends
-        # on them (`fyp/models.py`), so the timm version is part of the result.
         "timm": _timm_version(),
-        "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+        "device": (torch.cuda.get_device_name(0)
+                   if config.get_device().type == "cuda" else "cpu"),
         "is_result": is_full,
         "full_sample": full_sample,
     }
@@ -143,10 +98,7 @@ def header(n_eval_images: int | None = None, attack_steps: int | None = None) ->
 
 def save(name: str, payload: dict, n_eval_images: int | None = None,
          attack_steps: int | None = None) -> Path:
-    """Write `results/<name>.json`. Returns the path.
-
-    Pass `n_eval_images` and `attack_steps` from the run's own arguments; see `header`.
-    """
+    """Write results/<name>.json with metadata and return its path."""
     record = {"_meta": header(n_eval_images, attack_steps), **_jsonify(payload)}
     path = config.RESULTS_ROOT / f"{name}.json"
     path.write_text(json.dumps(record, indent=2), encoding="utf-8")
