@@ -58,6 +58,10 @@ class RSAConfig:
     backward: str = DEFAULT_BACKWARD
     # Blocks after k reuse block k's mask; None reselects at every block.
     freeze_mask_after: int | None = None
+    # Mask the union of n_windows blocks around greedily chosen anchors, suppressing
+    # anchors within Chebyshev distance < nms_radius (defaults to window).
+    n_windows: int = 1
+    nms_radius: int | None = None
 
     def __post_init__(self):
         if self.renormalise not in RENORMALISATIONS:
@@ -78,16 +82,32 @@ class RSAConfig:
             )
         if not 0 <= self.window <= config.GRID:
             raise ValueError(f"window {self.window} outside [0, {config.GRID}]")
-        if self.window_rule == "centred" and self.window > 0 and self.window % 2 == 0:
-            raise ValueError(
-                f"window_rule 'centred' needs an odd window so the block has a centre "
-                f"token; got {self.window}"
-            )
         if self.freeze_mask_after is not None and self.freeze_mask_after < 0:
             raise ValueError(
                 f"freeze_mask_after {self.freeze_mask_after} is negative; "
                 f"pass a block index or None"
             )
+        if self.n_windows < 1:
+            raise ValueError(f"n_windows {self.n_windows} is below 1")
+        if self.n_windows > 1 and self.window_rule != "centred":
+            raise ValueError(
+                f"n_windows > 1 is implemented for the centred rule only; "
+                f"got {self.window_rule!r}"
+            )
+        if self.nms_radius is not None and self.nms_radius < 1:
+            raise ValueError(f"nms_radius {self.nms_radius} is below 1")
+        # The first anchor always exists; only the ones after it can be suppressed away.
+        if (self.n_windows - 1) * (2 * self.radius - 1) ** 2 >= config.GRID ** 2:
+            raise ValueError(
+                f"n_windows={self.n_windows} at radius {self.radius} can suppress the "
+                f"whole {config.GRID}x{config.GRID} grid before {self.n_windows} anchors "
+                f"are chosen"
+            )
+
+    @property
+    def radius(self) -> int:
+        """Chebyshev suppression radius for multi-window selection."""
+        return self.window if self.nms_radius is None else self.nms_radius
 
     @classmethod
     def for_patch(cls, patch_px: int,
@@ -115,8 +135,8 @@ class RSAConfig:
 
     @property
     def masked_tokens(self) -> int:
-        """Nominal mask area; padded and multi rules can mask fewer tokens."""
-        return self.window * self.window
+        """Nominal mask area; padded, multi and overlapping windows mask fewer."""
+        return self.n_windows * self.window * self.window
 
     @property
     def allowed_masked_counts(self) -> frozenset[int]:
@@ -131,6 +151,9 @@ class RSAConfig:
         if self.window_rule == "multi":
             c = max(w - 1, 1)
             return frozenset(a * b for a in (c, c + 1) for b in (c, c + 1))
+        if self.n_windows > 1:
+            # Blocks shift inward at the borders, so separated anchors can still overlap.
+            return frozenset(range(w * w, self.n_windows * w * w + 1))
         return frozenset({w * w})
 
     def as_dict(self) -> dict:
@@ -142,8 +165,29 @@ class RSAConfig:
             "score_frame": self.score_frame,
             "backward": self.backward,
             "freeze_mask_after": self.freeze_mask_after,
+            "n_windows": self.n_windows,
+            "nms_radius": self.radius,
             "masked_tokens": self.masked_tokens,
         }
+
+
+def nms_anchors(scores: torch.Tensor, k: int, radius: int,
+                grid: int = config.GRID) -> torch.Tensor:
+    """Greedily take k anchors, suppressing anchors within Chebyshev distance < radius.
+
+    Ties go to the lower token index, matching argmax. Returns (B, k).
+    """
+    s = scores.clone()
+    ar = torch.arange(grid, device=scores.device)
+    out = []
+    for _ in range(k):
+        tok = s.argmax(1)                                              # (B,)
+        out.append(tok)
+        near_r = ((ar[None, :] - (tok // grid)[:, None]).abs() < radius)
+        near_c = ((ar[None, :] - (tok % grid)[:, None]).abs() < radius)
+        s = s.masked_fill((near_r[:, :, None] & near_c[:, None, :]).flatten(1),
+                          float("-inf"))
+    return torch.stack(out, dim=1)
 
 
 class _ScaleGrad(torch.autograd.Function):
@@ -231,6 +275,16 @@ class RSAAttention(nn.Module):
             flat.scatter_(1, idx, True)
             grid = flat.view(B, g, g)
             rc = torch.stack([idx[:, 0] // g, idx[:, 0] % g], dim=-1)
+        elif self.cfg.n_windows > 1:
+            anchors = nms_anchors(scores, self.cfg.n_windows, self.cfg.radius, g)
+            lo = (w - 1) // 2
+            r0 = (anchors // g - lo).clamp(0, g - w)                   # (B, k)
+            c0 = (anchors % g - lo).clamp(0, g - w)
+            ar = torch.arange(g, device=v.device)
+            rows = (ar >= r0[..., None]) & (ar < (r0 + w)[..., None])  # (B, k, G)
+            cols = (ar >= c0[..., None]) & (ar < (c0 + w)[..., None])
+            grid = (rows[:, :, :, None] & cols[:, :, None, :]).any(1)  # (B, G, G)
+            rc = torch.stack([r0[:, 0], c0[:, 0]], dim=-1)             # highest anchor
         else:
             r0, c0, h, wd = self._window_corner(scores, w, g, rule)
             ar = torch.arange(g, device=v.device)
@@ -288,6 +342,8 @@ class RSAAttention(nn.Module):
             return best_r, best_c, best_h, best_w
 
         if rule == "centred":
+            # An even window has no centre token; the anchor takes the upper-left
+            # of the two central positions.
             lo = (w - 1) // 2
             tok = scores.argmax(1)
             r0 = (tok // g - lo).clamp(0, g - w)

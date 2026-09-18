@@ -1,0 +1,280 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-17T07:36:35+00:00",
+    "git_commit": null,
+    "git_dirty": false,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 128,
+    "attack_steps": 100,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
+    "device": "Tesla T4",
+    "is_result": true,
+    "full_sample": false
+  },
+  "purpose": "offline top-k/NMS screening and score decomposition on the saved capture",
+  "source": "selection_capture_dev.pt",
+  "nms": "greedy by score, ties on the lower token index; suppress anchors within Chebyshev distance < radius; radius 1 is plain top-k, radius 3 separates 3x3 blocks in the interior but border blocks shift inward and can overlap",
+  "caveat": "union coverage is geometric screening on existing attacks, not recovered accuracy and not robustness against an attacker adapted to the rule",
+  "settings": {
+    "k": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      8
+    ],
+    "radius": [
+      1,
+      2,
+      3
+    ],
+    "single_sides": [
+      3,
+      5,
+      6,
+      7
+    ],
+    "size": 20,
+    "steps": 100,
+    "weights": [
+      0.0,
+      0.5
+    ],
+    "window": 3,
+    "window_rule": "centred",
+    "freeze_mask_after": 0,
+    "score_frame": "global",
+    "backward": "intended"
+  },
+  "grid": {
+    "k=1,r=1": {
+      "cover_all_pct": 10.15625,
+      "cover_newly_pct": 0.0,
+      "cover_newly": "0/86",
+      "union_tokens_mean": 9.0,
+      "clean_union_tokens_mean": 9.0
+    },
+    "k=1,r=2": {
+      "cover_all_pct": 10.15625,
+      "cover_newly_pct": 0.0,
+      "cover_newly": "0/86",
+      "union_tokens_mean": 9.0,
+      "clean_union_tokens_mean": 9.0
+    },
+    "k=1,r=3": {
+      "cover_all_pct": 10.15625,
+      "cover_newly_pct": 0.0,
+      "cover_newly": "0/86",
+      "union_tokens_mean": 9.0,
+      "clean_union_tokens_mean": 9.0
+    },
+    "k=2,r=1": {
+      "cover_all_pct": 12.3046875,
+      "cover_newly_pct": 4.651162790697675,
+      "cover_newly": "4/86",
+      "union_tokens_mean": 15.72265625,
+      "clean_union_tokens_mean": 15.96875
+    },
+    "k=2,r=2": {
+      "cover_all_pct": 12.6953125,
+      "cover_newly_pct": 4.651162790697675,
+      "cover_newly": "4/86",
+      "union_tokens_mean": 17.517578125,
+      "clean_union_tokens_mean": 17.5078125
+    },
+    "k=2,r=3": {
+      "cover_all_pct": 12.3046875,
+      "cover_newly_pct": 2.3255813953488373,
+      "cover_newly": "2/86",
+      "union_tokens_mean": 17.958984375,
+      "clean_union_tokens_mean": 17.953125
+    },
+    "k=3,r=1": {
+      "cover_all_pct": 14.84375,
+      "cover_newly_pct": 8.13953488372093,
+      "cover_newly": "7/86",
+      "union_tokens_mean": 21.9296875,
+      "clean_union_tokens_mean": 22.5703125
+    },
+    "k=3,r=2": {
+      "cover_all_pct": 16.2109375,
+      "cover_newly_pct": 11.627906976744185,
+      "cover_newly": "10/86",
+      "union_tokens_mean": 25.51171875,
+      "clean_union_tokens_mean": 25.5390625
+    },
+    "k=3,r=3": {
+      "cover_all_pct": 16.2109375,
+      "cover_newly_pct": 13.953488372093023,
+      "cover_newly": "12/86",
+      "union_tokens_mean": 26.822265625,
+      "clean_union_tokens_mean": 26.8203125
+    },
+    "k=4,r=1": {
+      "cover_all_pct": 16.796875,
+      "cover_newly_pct": 12.790697674418604,
+      "cover_newly": "11/86",
+      "union_tokens_mean": 27.421875,
+      "clean_union_tokens_mean": 28.453125
+    },
+    "k=4,r=2": {
+      "cover_all_pct": 19.140625,
+      "cover_newly_pct": 18.6046511627907,
+      "cover_newly": "16/86",
+      "union_tokens_mean": 33.326171875,
+      "clean_union_tokens_mean": 33.25
+    },
+    "k=4,r=3": {
+      "cover_all_pct": 21.484375,
+      "cover_newly_pct": 27.906976744186046,
+      "cover_newly": "24/86",
+      "union_tokens_mean": 35.62109375,
+      "clean_union_tokens_mean": 35.609375
+    },
+    "k=6,r=1": {
+      "cover_all_pct": 19.53125,
+      "cover_newly_pct": 17.441860465116278,
+      "cover_newly": "15/86",
+      "union_tokens_mean": 37.896484375,
+      "clean_union_tokens_mean": 38.9375
+    },
+    "k=6,r=2": {
+      "cover_all_pct": 27.9296875,
+      "cover_newly_pct": 30.232558139534884,
+      "cover_newly": "26/86",
+      "union_tokens_mean": 48.01953125,
+      "clean_union_tokens_mean": 47.9453125
+    },
+    "k=6,r=3": {
+      "cover_all_pct": 32.421875,
+      "cover_newly_pct": 40.69767441860465,
+      "cover_newly": "35/86",
+      "union_tokens_mean": 53.162109375,
+      "clean_union_tokens_mean": 53.1328125
+    },
+    "k=8,r=1": {
+      "cover_all_pct": 25.5859375,
+      "cover_newly_pct": 25.58139534883721,
+      "cover_newly": "22/86",
+      "union_tokens_mean": 47.04296875,
+      "clean_union_tokens_mean": 47.90625
+    },
+    "k=8,r=2": {
+      "cover_all_pct": 36.71875,
+      "cover_newly_pct": 46.51162790697674,
+      "cover_newly": "40/86",
+      "union_tokens_mean": 61.552734375,
+      "clean_union_tokens_mean": 61.6484375
+    },
+    "k=8,r=3": {
+      "cover_all_pct": 42.3828125,
+      "cover_newly_pct": 51.16279069767442,
+      "cover_newly": "44/86",
+      "union_tokens_mean": 70.501953125,
+      "clean_union_tokens_mean": 70.4765625
+    }
+  },
+  "single_block": {
+    "3": {
+      "cover_all_pct": 10.15625,
+      "cover_newly": "0/86",
+      "union_tokens_mean": 9.0
+    },
+    "5": {
+      "cover_all_pct": 18.359375,
+      "cover_newly": "7/86",
+      "union_tokens_mean": 25.0
+    },
+    "6": {
+      "cover_all_pct": 21.09375,
+      "cover_newly": "10/86",
+      "union_tokens_mean": 36.0
+    },
+    "7": {
+      "cover_all_pct": 25.5859375,
+      "cover_newly": "15/86",
+      "union_tokens_mean": 49.0
+    }
+  },
+  "decomposition": {
+    "60,60": {
+      "0.0": {
+        "foot_clean": 4.068735599517822,
+        "foot_fixed_ref": 5.7152886390686035,
+        "foot_own": 5.712283611297607,
+        "won_clean": 4.132277488708496,
+        "won_own": 7.3665947914123535,
+        "foot_max_below_won_pct": 4.6875
+      },
+      "0.5": {
+        "foot_clean": 4.068735599517822,
+        "foot_fixed_ref": 4.777652263641357,
+        "foot_own": 4.77505350112915,
+        "won_clean": 5.7027788162231445,
+        "won_own": 5.770257949829102,
+        "foot_max_below_won_pct": 96.09375
+      }
+    },
+    "0,0": {
+      "0.0": {
+        "foot_clean": 3.762404441833496,
+        "foot_fixed_ref": 5.711209297180176,
+        "foot_own": 5.7076873779296875,
+        "won_clean": 3.7970211505889893,
+        "won_own": 7.533486366271973,
+        "foot_max_below_won_pct": 1.5625
+      },
+      "0.5": {
+        "foot_clean": 3.762404441833496,
+        "foot_fixed_ref": 4.680117130279541,
+        "foot_own": 4.677613735198975,
+        "won_clean": 5.646307945251465,
+        "won_own": 5.785964488983154,
+        "foot_max_below_won_pct": 91.40625
+      }
+    },
+    "100,20": {
+      "0.0": {
+        "foot_clean": 3.962808609008789,
+        "foot_fixed_ref": 6.413911819458008,
+        "foot_own": 6.407974720001221,
+        "won_clean": 4.165233135223389,
+        "won_own": 7.290747165679932,
+        "foot_max_below_won_pct": 6.25
+      },
+      "0.5": {
+        "foot_clean": 3.962808609008789,
+        "foot_fixed_ref": 5.206862926483154,
+        "foot_own": 5.202375411987305,
+        "won_clean": 5.4804840087890625,
+        "won_own": 5.827834129333496,
+        "foot_max_below_won_pct": 78.90625
+      }
+    },
+    "140,160": {
+      "0.0": {
+        "foot_clean": 4.108296871185303,
+        "foot_fixed_ref": 5.659181594848633,
+        "foot_own": 5.655799388885498,
+        "won_clean": 4.195913791656494,
+        "won_own": 7.339961051940918,
+        "foot_max_below_won_pct": 3.90625
+      },
+      "0.5": {
+        "foot_clean": 4.108296871185303,
+        "foot_fixed_ref": 4.735426902770996,
+        "foot_own": 4.733068943023682,
+        "won_clean": 5.667080402374268,
+        "won_own": 5.768992900848389,
+        "foot_max_below_won_pct": 92.96875
+      }
+    }
+  }
+}

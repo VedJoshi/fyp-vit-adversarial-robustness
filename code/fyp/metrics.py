@@ -160,13 +160,17 @@ def rsa_token_scores(
     v: torch.Tensor,
     exclude_cls: bool = True,
     frame: str = DEFAULT_SCORE_FRAME,
+    mu: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Head-averaged L2 distance from the chosen mean; returns (B, N_img).
 
     CLS is excluded by default. frame selects a global or per-head mean.
+    Passing mu substitutes a reference computed elsewhere, which scores one
+    image's tokens against another's mean; frame is then unused.
     """
     vv = v[:, :, 1:, :] if exclude_cls else v        # (B, H, N_img, head_dim)
-    mu = score_frame_mean(v, exclude_cls=exclude_cls, frame=frame)
+    if mu is None:
+        mu = score_frame_mean(v, exclude_cls=exclude_cls, frame=frame)
     scores = (vv - mu).norm(dim=-1)                  # (B, H, N_img)
     return scores.mean(1)                            # average over heads -> (B, N_img)
 

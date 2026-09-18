@@ -8,8 +8,11 @@ of the audit is Robust Self-Attention (RSA), an inference-time defense that iden
 groups of image tokens and replaces their value vectors during attention.
 
 The repository contains the evaluation code, attack implementations, reproducibility checks, and
-machine-readable results. The current work focuses on whether RSA's published robustness can be
-reproduced under a correct adaptive attack.
+machine-readable results. The reproduction and gradient audit are complete. Current work tests
+whether a small inference-time change to RSA can improve resistance to selection-aware attacks
+without knowing the patch location. Multi-region masking improves classification against saved attacks on development images;
+a fresh adaptive pilot is now under review, with no completed local result yet. See [the current handoff](CODEX_Handoff.md) and
+[the defence explanation](02_direction/DEFENCE_DIRECTION_EXPLAINED_2026-09-17.md).
 
 ## Main result
 

@@ -101,16 +101,32 @@ def check_containment_on_grid():
 
 
 def check_config_guards():
-    """An even side has no centre, and the masked count stays w*w."""
+    """for_patch sizes odd, an even side still blocks contiguously, guards hold."""
     cfg = rsa.RSAConfig.for_patch(20, window_rule="centred")
     assert cfg.window == 3 and cfg.masked_tokens == 9
     assert cfg.allowed_masked_counts == frozenset({9})
-    try:
-        rsa.RSAConfig(patch_px=40, window=4, window_rule="centred")
-    except ValueError as e:
-        assert "odd window" in str(e), e
-    else:
-        raise AssertionError("an even window should be rejected for 'centred'")
+
+    # Even sides are never auto-sized but are allowed for size-matched comparisons.
+    assert rsa.RSAConfig(patch_px=40, window=6, window_rule="centred").masked_tokens == 36
+    for t in range(GRID * GRID):
+        r0, c0, h, w = corner(peaked(t), 6)
+        assert (h, w) == (6, 6) and 0 <= int(r0) <= GRID - 6 and 0 <= int(c0) <= GRID - 6
+        assert int(r0) <= t // GRID < int(r0) + 6 and int(c0) <= t % GRID < int(c0) + 6,             f"an even block must contain its anchor; token {t} gave ({int(r0)},{int(c0)})"
+
+    rejected = [(dict(n_windows=0), "below 1"),
+                (dict(n_windows=2, window_rule="topk"), "centred rule only"),
+                (dict(n_windows=9, nms_radius=5, window_rule="centred"),
+                 "suppress the whole")]
+    # One window is always selectable, whatever the radius implies about suppression.
+    for side in (3, 7, 8, GRID):
+        rsa.RSAConfig(patch_px=20, window=side, window_rule="centred")
+    for bad, msg in rejected:
+        try:
+            rsa.RSAConfig(patch_px=20, window=3, **bad)
+        except ValueError as e:
+            assert msg in str(e), e
+        else:
+            raise AssertionError(f"{bad} should be rejected")
     assert "centred" in rsa.WINDOW_RULES
     import checkpoint_control
     assert "centred" in checkpoint_control.NO_WINDOW_RANK
@@ -120,7 +136,8 @@ def check_config_guards():
     for k in (None, 0, 5):
         assert rsa.RSAConfig.for_patch(
             20, window_rule="centred", freeze_mask_after=k).freeze_mask_after == k
-    print("config guards   ok   odd side enforced, 9 tokens, registered in both tuples; "
+    print("config guards   ok   even sides block contiguously, 9 tokens, multi-window "
+          "guards reject, registered in both tuples; "
           "for_patch sizes the block by the guarantee and carries freeze_mask_after")
 
 

@@ -1,0 +1,155 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-17T10:59:33+00:00",
+    "git_commit": "51171ac",
+    "git_dirty": true,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 128,
+    "attack_steps": 100,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true,
+    "full_sample": false
+  },
+  "purpose": "offline screen of rescoring rules on the saved capture; mask geometry is unchanged and only the ranking differs",
+  "source": "selection_capture_dev.pt",
+  "caveat": "coverage is geometric screening on existing attacks, not recovered accuracy and not robustness against an attacker adapted to the rule",
+  "note": "any strictly monotone per-token transform leaves the argmax unchanged, so score-map rescoring can only act through spatial structure",
+  "settings": {
+    "lambdas": [
+      0.5,
+      1.0,
+      2.0,
+      4.0,
+      8.0
+    ],
+    "size": 20,
+    "steps": 100,
+    "weights": [
+      0.0,
+      0.5
+    ],
+    "window": 3,
+    "window_rule": "centred",
+    "freeze_mask_after": 0,
+    "score_frame": "global"
+  },
+  "rules": {
+    "max": {
+      "cover_w0.0": 95.8984375,
+      "cover_w0.5": 10.15625,
+      "clean_moved_pct": 0.0,
+      "clean_cover_pct": 3.515625
+    },
+    "monotone_null": {
+      "cover_w0.0": 95.8984375,
+      "cover_w0.5": 10.15625,
+      "clean_moved_pct": 0.0,
+      "clean_cover_pct": 3.515625
+    },
+    "pool2": {
+      "cover_w0.0": 80.2734375,
+      "cover_w0.5": 16.9921875,
+      "clean_moved_pct": 84.375,
+      "clean_cover_pct": 2.1484375
+    },
+    "pool3": {
+      "cover_w0.0": 56.25,
+      "cover_w0.5": 15.0390625,
+      "clean_moved_pct": 89.84375,
+      "clean_cover_pct": 2.1484375
+    },
+    "pool5": {
+      "cover_w0.0": 15.0390625,
+      "cover_w0.5": 5.6640625,
+      "clean_moved_pct": 97.65625,
+      "clean_cover_pct": 1.171875
+    },
+    "contrast0.5": {
+      "cover_w0.0": 96.484375,
+      "cover_w0.5": 11.328125,
+      "clean_moved_pct": 25.0,
+      "clean_cover_pct": 3.515625
+    },
+    "blob0.5": {
+      "cover_w0.0": 96.09375,
+      "cover_w0.5": 12.109375,
+      "clean_moved_pct": 38.28125,
+      "clean_cover_pct": 1.5625
+    },
+    "contrast1": {
+      "cover_w0.0": 96.6796875,
+      "cover_w0.5": 12.6953125,
+      "clean_moved_pct": 42.1875,
+      "clean_cover_pct": 3.515625
+    },
+    "blob1": {
+      "cover_w0.0": 94.3359375,
+      "cover_w0.5": 13.671875,
+      "clean_moved_pct": 54.6875,
+      "clean_cover_pct": 1.171875
+    },
+    "contrast2": {
+      "cover_w0.0": 94.921875,
+      "cover_w0.5": 16.6015625,
+      "clean_moved_pct": 60.15625,
+      "clean_cover_pct": 3.7109375
+    },
+    "blob2": {
+      "cover_w0.0": 88.4765625,
+      "cover_w0.5": 14.84375,
+      "clean_moved_pct": 71.09375,
+      "clean_cover_pct": 1.7578125
+    },
+    "contrast4": {
+      "cover_w0.0": 87.109375,
+      "cover_w0.5": 19.140625,
+      "clean_moved_pct": 74.21875,
+      "clean_cover_pct": 2.734375
+    },
+    "blob4": {
+      "cover_w0.0": 83.7890625,
+      "cover_w0.5": 16.796875,
+      "clean_moved_pct": 76.5625,
+      "clean_cover_pct": 2.1484375
+    },
+    "contrast8": {
+      "cover_w0.0": 80.078125,
+      "cover_w0.5": 20.1171875,
+      "clean_moved_pct": 81.25,
+      "clean_cover_pct": 2.9296875
+    },
+    "blob8": {
+      "cover_w0.0": 82.6171875,
+      "cover_w0.5": 17.1875,
+      "clean_moved_pct": 82.8125,
+      "clean_cover_pct": 2.1484375
+    }
+  },
+  "ceiling": [
+    {
+      "seed": 0,
+      "fitted_pct": 64.453125,
+      "held_out_pct": 28.515625,
+      "arm5_held_out_pct": 13.28125
+    },
+    {
+      "seed": 1,
+      "fitted_pct": 73.4375,
+      "held_out_pct": 17.578125,
+      "arm5_held_out_pct": 7.8125
+    },
+    {
+      "seed": 2,
+      "fitted_pct": 71.875,
+      "held_out_pct": 23.828125,
+      "arm5_held_out_pct": 10.9375
+    }
+  ]
+}

@@ -1,0 +1,2153 @@
+{
+  "purpose": "fixed-attack geometry screening, not classifier accuracy",
+  "capture": "selection_capture_dev.pt",
+  "capture_sha256": "e07c8d0da866c9d74907ed10cac8e30b82f3a0e0de6632ad49dde47bf586d7d3",
+  "rule": "CPU-only coverage screen of fixed attacks; does not evaluate classifier accuracy.\n\nNMS greedily keeps anchors in descending score order (lower index breaks ties),\nrejecting candidates within Chebyshev distance <= radius of a kept anchor.\nRadius 0 is ordinary top-k. Windows use RSA's inward-shifted centred geometry.\nNeither NMS nor k guarantees a fixed union size, especially at image edges.\n",
+  "k_values": [
+    1,
+    2,
+    3,
+    4,
+    8
+  ],
+  "radii": [
+    0,
+    1,
+    2
+  ],
+  "n_images": 128,
+  "new_cases": "clean-correct and wrong under weight 0.5 but not 0 at the same location",
+  "counts": "image-location cases, not independent or distinct images",
+  "rows": [
+    {
+      "radius": 0,
+      "k": 1,
+      "clean_masked_tokens": {
+        "mean": 9,
+        "median": 9.0,
+        "minimum": 9,
+        "maximum": 9
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 491,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 9,
+            "median": 9.0,
+            "minimum": 9,
+            "maximum": 9
+          }
+        },
+        "0.5": {
+          "full": 52,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 9,
+            "median": 9.0,
+            "minimum": 9,
+            "maximum": 9
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 122,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 5,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 11,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 120,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 27,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 123,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 9,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 0,
+      "k": 2,
+      "clean_masked_tokens": {
+        "mean": 15.96875,
+        "median": 18.0,
+        "minimum": 9,
+        "maximum": 18
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 506,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 14.44140625,
+            "median": 12.0,
+            "minimum": 9,
+            "maximum": 18
+          }
+        },
+        "0.5": {
+          "full": 63,
+          "cases": 512,
+          "new_full": 4,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 15.72265625,
+            "median": 18.0,
+            "minimum": 9,
+            "maximum": 18
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 14.96875,
+              "median": 16.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 8,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 15.9921875,
+              "median": 18.0,
+              "minimum": 9,
+              "maximum": 18
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 14.6484375,
+              "median": 18.0,
+              "minimum": 9,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 13,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 15.609375,
+              "median": 18.0,
+              "minimum": 9,
+              "maximum": 18
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 12.640625,
+              "median": 12.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 29,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 15.3203125,
+              "median": 16.5,
+              "minimum": 9,
+              "maximum": 18
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 15.5078125,
+              "median": 18.0,
+              "minimum": 9,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 13,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 15.96875,
+              "median": 18.0,
+              "minimum": 9,
+              "maximum": 18
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 0,
+      "k": 3,
+      "clean_masked_tokens": {
+        "mean": 22.5703125,
+        "median": 23.0,
+        "minimum": 12,
+        "maximum": 27
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 508,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 19.798828125,
+            "median": 21.0,
+            "minimum": 9,
+            "maximum": 27
+          }
+        },
+        "0.5": {
+          "full": 76,
+          "cases": 512,
+          "new_full": 7,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 21.9296875,
+            "median": 21.0,
+            "minimum": 9,
+            "maximum": 27
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 20.8828125,
+              "median": 21.0,
+              "minimum": 15,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 10,
+            "cases": 128,
+            "new_full": 2,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 22.515625,
+              "median": 23.0,
+              "minimum": 12,
+              "maximum": 27
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 19.296875,
+              "median": 21.0,
+              "minimum": 9,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 16,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 21.4921875,
+              "median": 21.0,
+              "minimum": 9,
+              "maximum": 27
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 16.953125,
+              "median": 15.0,
+              "minimum": 15,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 34,
+            "cases": 128,
+            "new_full": 3,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 21.203125,
+              "median": 21.0,
+              "minimum": 12,
+              "maximum": 27
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 22.0625,
+              "median": 21.0,
+              "minimum": 15,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 16,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 22.5078125,
+              "median": 23.0,
+              "minimum": 12,
+              "maximum": 27
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 0,
+      "k": 4,
+      "clean_masked_tokens": {
+        "mean": 28.453125,
+        "median": 29.0,
+        "minimum": 12,
+        "maximum": 36
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 510,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 25.525390625,
+            "median": 25.0,
+            "minimum": 9,
+            "maximum": 36
+          }
+        },
+        "0.5": {
+          "full": 86,
+          "cases": 512,
+          "new_full": 11,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 27.421875,
+            "median": 28.0,
+            "minimum": 9,
+            "maximum": 36
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 27.09375,
+              "median": 27.0,
+              "minimum": 16,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 13,
+            "cases": 128,
+            "new_full": 3,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 28.1484375,
+              "median": 29.0,
+              "minimum": 12,
+              "maximum": 36
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 25.609375,
+              "median": 27.0,
+              "minimum": 9,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 16,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 27.171875,
+              "median": 27.5,
+              "minimum": 9,
+              "maximum": 36
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 21.296875,
+              "median": 21.5,
+              "minimum": 15,
+              "maximum": 34
+            }
+          },
+          "0.5": {
+            "full": 40,
+            "cases": 128,
+            "new_full": 6,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 26.09375,
+              "median": 27.0,
+              "minimum": 12,
+              "maximum": 36
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 28.1015625,
+              "median": 29.0,
+              "minimum": 16,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 17,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 28.2734375,
+              "median": 29.0,
+              "minimum": 12,
+              "maximum": 36
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 0,
+      "k": 8,
+      "clean_masked_tokens": {
+        "mean": 47.90625,
+        "median": 48.0,
+        "minimum": 26,
+        "maximum": 66
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 512,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 46.484375,
+            "median": 47.0,
+            "minimum": 27,
+            "maximum": 70
+          }
+        },
+        "0.5": {
+          "full": 131,
+          "cases": 512,
+          "new_full": 22,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 47.04296875,
+            "median": 47.0,
+            "minimum": 26,
+            "maximum": 66
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 47.6015625,
+              "median": 48.0,
+              "minimum": 32,
+              "maximum": 70
+            }
+          },
+          "0.5": {
+            "full": 27,
+            "cases": 128,
+            "new_full": 6,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 47.4921875,
+              "median": 47.5,
+              "minimum": 26,
+              "maximum": 66
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 46.0859375,
+              "median": 46.0,
+              "minimum": 27,
+              "maximum": 70
+            }
+          },
+          "0.5": {
+            "full": 24,
+            "cases": 128,
+            "new_full": 2,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 47.0546875,
+              "median": 48.0,
+              "minimum": 26,
+              "maximum": 66
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 44.1875,
+              "median": 43.5,
+              "minimum": 31,
+              "maximum": 61
+            }
+          },
+          "0.5": {
+            "full": 57,
+            "cases": 128,
+            "new_full": 11,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 46.15625,
+              "median": 46.0,
+              "minimum": 26,
+              "maximum": 66
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 48.0625,
+              "median": 48.0,
+              "minimum": 33,
+              "maximum": 67
+            }
+          },
+          "0.5": {
+            "full": 23,
+            "cases": 128,
+            "new_full": 3,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 47.46875,
+              "median": 48.0,
+              "minimum": 26,
+              "maximum": 66
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 1,
+      "k": 1,
+      "clean_masked_tokens": {
+        "mean": 9,
+        "median": 9.0,
+        "minimum": 9,
+        "maximum": 9
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 491,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 9,
+            "median": 9.0,
+            "minimum": 9,
+            "maximum": 9
+          }
+        },
+        "0.5": {
+          "full": 52,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 9,
+            "median": 9.0,
+            "minimum": 9,
+            "maximum": 9
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 122,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 5,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 11,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 120,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 27,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 123,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 9,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 1,
+      "k": 2,
+      "clean_masked_tokens": {
+        "mean": 17.5078125,
+        "median": 18.0,
+        "minimum": 12,
+        "maximum": 18
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 507,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 17.826171875,
+            "median": 18.0,
+            "minimum": 12,
+            "maximum": 18
+          }
+        },
+        "0.5": {
+          "full": 65,
+          "cases": 512,
+          "new_full": 4,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 17.517578125,
+            "median": 18.0,
+            "minimum": 12,
+            "maximum": 18
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 17.796875,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 8,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 17.5,
+              "median": 18.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 17.7890625,
+              "median": 18.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 14,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 17.4765625,
+              "median": 18.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 125,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 17.8515625,
+              "median": 18.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 30,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 17.578125,
+              "median": 18.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 17.8671875,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 13,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 17.515625,
+              "median": 18.0,
+              "minimum": 12,
+              "maximum": 18
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 1,
+      "k": 3,
+      "clean_masked_tokens": {
+        "mean": 25.5390625,
+        "median": 27.0,
+        "minimum": 18,
+        "maximum": 27
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 510,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 26.15625,
+            "median": 27.0,
+            "minimum": 19,
+            "maximum": 27
+          }
+        },
+        "0.5": {
+          "full": 83,
+          "cases": 512,
+          "new_full": 10,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 25.51171875,
+            "median": 27.0,
+            "minimum": 18,
+            "maximum": 27
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.171875,
+              "median": 27.0,
+              "minimum": 19,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 12,
+            "cases": 128,
+            "new_full": 3,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 25.5390625,
+              "median": 26.5,
+              "minimum": 18,
+              "maximum": 27
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.0234375,
+              "median": 27.0,
+              "minimum": 21,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 16,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 25.4296875,
+              "median": 26.0,
+              "minimum": 18,
+              "maximum": 27
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.2109375,
+              "median": 27.0,
+              "minimum": 21,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 38,
+            "cases": 128,
+            "new_full": 5,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 25.546875,
+              "median": 27.0,
+              "minimum": 18,
+              "maximum": 27
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.21875,
+              "median": 27.0,
+              "minimum": 21,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 17,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 25.53125,
+              "median": 27.0,
+              "minimum": 18,
+              "maximum": 27
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 1,
+      "k": 4,
+      "clean_masked_tokens": {
+        "mean": 33.25,
+        "median": 33.0,
+        "minimum": 27,
+        "maximum": 36
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 511,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 33.978515625,
+            "median": 34.0,
+            "minimum": 26,
+            "maximum": 36
+          }
+        },
+        "0.5": {
+          "full": 98,
+          "cases": 512,
+          "new_full": 16,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 33.326171875,
+            "median": 34.0,
+            "minimum": 27,
+            "maximum": 36
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 34.0546875,
+              "median": 34.0,
+              "minimum": 27,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 19,
+            "cases": 128,
+            "new_full": 5,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 33.3828125,
+              "median": 34.0,
+              "minimum": 27,
+              "maximum": 36
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 33.7265625,
+              "median": 34.0,
+              "minimum": 26,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 16,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 33.2578125,
+              "median": 33.5,
+              "minimum": 27,
+              "maximum": 36
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 34.1328125,
+              "median": 34.0,
+              "minimum": 27,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 43,
+            "cases": 128,
+            "new_full": 7,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 33.34375,
+              "median": 34.0,
+              "minimum": 27,
+              "maximum": 36
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 34,
+              "median": 34.0,
+              "minimum": 26,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 20,
+            "cases": 128,
+            "new_full": 3,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 33.3203125,
+              "median": 34.0,
+              "minimum": 27,
+              "maximum": 36
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 1,
+      "k": 8,
+      "clean_masked_tokens": {
+        "mean": 61.6484375,
+        "median": 62.0,
+        "minimum": 50,
+        "maximum": 71
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 512,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 62.39453125,
+            "median": 63.0,
+            "minimum": 47,
+            "maximum": 72
+          }
+        },
+        "0.5": {
+          "full": 188,
+          "cases": 512,
+          "new_full": 40,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 61.552734375,
+            "median": 62.0,
+            "minimum": 47,
+            "maximum": 72
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 62.5390625,
+              "median": 63.0,
+              "minimum": 52,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 37,
+            "cases": 128,
+            "new_full": 9,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 61.484375,
+              "median": 61.0,
+              "minimum": 50,
+              "maximum": 71
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 62.34375,
+              "median": 62.0,
+              "minimum": 47,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 37,
+            "cases": 128,
+            "new_full": 7,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 61.390625,
+              "median": 61.5,
+              "minimum": 47,
+              "maximum": 72
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 62.625,
+              "median": 63.0,
+              "minimum": 51,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 73,
+            "cases": 128,
+            "new_full": 14,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 61.7265625,
+              "median": 62.0,
+              "minimum": 50,
+              "maximum": 72
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 62.0703125,
+              "median": 62.0,
+              "minimum": 50,
+              "maximum": 71
+            }
+          },
+          "0.5": {
+            "full": 41,
+            "cases": 128,
+            "new_full": 10,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 61.609375,
+              "median": 62.0,
+              "minimum": 50,
+              "maximum": 71
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 2,
+      "k": 1,
+      "clean_masked_tokens": {
+        "mean": 9,
+        "median": 9.0,
+        "minimum": 9,
+        "maximum": 9
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 491,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 9,
+            "median": 9.0,
+            "minimum": 9,
+            "maximum": 9
+          }
+        },
+        "0.5": {
+          "full": 52,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 9,
+            "median": 9.0,
+            "minimum": 9,
+            "maximum": 9
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 122,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 5,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 11,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 120,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 27,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 123,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          },
+          "0.5": {
+            "full": 9,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 9,
+              "median": 9.0,
+              "minimum": 9,
+              "maximum": 9
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 2,
+      "k": 2,
+      "clean_masked_tokens": {
+        "mean": 17.953125,
+        "median": 18.0,
+        "minimum": 15,
+        "maximum": 18
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 506,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 17.958984375,
+            "median": 18.0,
+            "minimum": 15,
+            "maximum": 18
+          }
+        },
+        "0.5": {
+          "full": 63,
+          "cases": 512,
+          "new_full": 2,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 17.958984375,
+            "median": 18.0,
+            "minimum": 15,
+            "maximum": 18
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 18,
+              "median": 18.0,
+              "minimum": 18,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 6,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 17.953125,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 17.8671875,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 13,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 17.96875,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 125,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 18,
+              "median": 18.0,
+              "minimum": 18,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 31,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 17.96875,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 126,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 17.96875,
+              "median": 18.0,
+              "minimum": 16,
+              "maximum": 18
+            }
+          },
+          "0.5": {
+            "full": 13,
+            "cases": 128,
+            "new_full": 1,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 17.9453125,
+              "median": 18.0,
+              "minimum": 15,
+              "maximum": 18
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 2,
+      "k": 3,
+      "clean_masked_tokens": {
+        "mean": 26.8203125,
+        "median": 27.0,
+        "minimum": 24,
+        "maximum": 27
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 510,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 26.892578125,
+            "median": 27.0,
+            "minimum": 24,
+            "maximum": 27
+          }
+        },
+        "0.5": {
+          "full": 83,
+          "cases": 512,
+          "new_full": 12,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 26.822265625,
+            "median": 27.0,
+            "minimum": 24,
+            "maximum": 27
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.9453125,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 14,
+            "cases": 128,
+            "new_full": 4,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 26.7890625,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.8359375,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 14,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 26.8203125,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.9609375,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 39,
+            "cases": 128,
+            "new_full": 6,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 26.8671875,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 26.828125,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          },
+          "0.5": {
+            "full": 16,
+            "cases": 128,
+            "new_full": 2,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 26.8125,
+              "median": 27.0,
+              "minimum": 24,
+              "maximum": 27
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 2,
+      "k": 4,
+      "clean_masked_tokens": {
+        "mean": 35.609375,
+        "median": 36.0,
+        "minimum": 33,
+        "maximum": 36
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 510,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 35.685546875,
+            "median": 36.0,
+            "minimum": 32,
+            "maximum": 36
+          }
+        },
+        "0.5": {
+          "full": 110,
+          "cases": 512,
+          "new_full": 24,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 35.62109375,
+            "median": 36.0,
+            "minimum": 32,
+            "maximum": 36
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 35.796875,
+              "median": 36.0,
+              "minimum": 33,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 18,
+            "cases": 128,
+            "new_full": 7,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 35.6015625,
+              "median": 36.0,
+              "minimum": 33,
+              "maximum": 36
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 35.5390625,
+              "median": 36.0,
+              "minimum": 32,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 18,
+            "cases": 128,
+            "new_full": 2,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 35.5703125,
+              "median": 36.0,
+              "minimum": 32,
+              "maximum": 36
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 35.7890625,
+              "median": 36.0,
+              "minimum": 33,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 52,
+            "cases": 128,
+            "new_full": 11,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 35.6875,
+              "median": 36.0,
+              "minimum": 33,
+              "maximum": 36
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 35.6171875,
+              "median": 36.0,
+              "minimum": 33,
+              "maximum": 36
+            }
+          },
+          "0.5": {
+            "full": 22,
+            "cases": 128,
+            "new_full": 4,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 35.625,
+              "median": 36.0,
+              "minimum": 33,
+              "maximum": 36
+            }
+          }
+        }
+      }
+    },
+    {
+      "radius": 2,
+      "k": 8,
+      "clean_masked_tokens": {
+        "mean": 70.4765625,
+        "median": 71.0,
+        "minimum": 62,
+        "maximum": 72
+      },
+      "aggregate": {
+        "0.0": {
+          "full": 510,
+          "cases": 512,
+          "new_full": 0,
+          "new_cases": 0,
+          "masked_tokens": {
+            "mean": 70.490234375,
+            "median": 71.0,
+            "minimum": 62,
+            "maximum": 72
+          }
+        },
+        "0.5": {
+          "full": 217,
+          "cases": 512,
+          "new_full": 44,
+          "new_cases": 86,
+          "masked_tokens": {
+            "mean": 70.501953125,
+            "median": 71.0,
+            "minimum": 62,
+            "maximum": 72
+          }
+        }
+      },
+      "per_location": {
+        "60,60": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 70.8203125,
+              "median": 72.0,
+              "minimum": 62,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 39,
+            "cases": 128,
+            "new_full": 10,
+            "new_cases": 23,
+            "masked_tokens": {
+              "mean": 70.4609375,
+              "median": 71.0,
+              "minimum": 62,
+              "maximum": 72
+            }
+          }
+        },
+        "0,0": {
+          "0.0": {
+            "full": 128,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 70.15625,
+              "median": 70.0,
+              "minimum": 62,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 51,
+            "cases": 128,
+            "new_full": 8,
+            "new_cases": 19,
+            "masked_tokens": {
+              "mean": 70.328125,
+              "median": 71.0,
+              "minimum": 62,
+              "maximum": 72
+            }
+          }
+        },
+        "100,20": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 70.6484375,
+              "median": 72.0,
+              "minimum": 62,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 83,
+            "cases": 128,
+            "new_full": 17,
+            "new_cases": 20,
+            "masked_tokens": {
+              "mean": 70.625,
+              "median": 71.5,
+              "minimum": 62,
+              "maximum": 72
+            }
+          }
+        },
+        "140,160": {
+          "0.0": {
+            "full": 127,
+            "cases": 128,
+            "new_full": 0,
+            "new_cases": 0,
+            "masked_tokens": {
+              "mean": 70.3359375,
+              "median": 70.5,
+              "minimum": 64,
+              "maximum": 72
+            }
+          },
+          "0.5": {
+            "full": 44,
+            "cases": 128,
+            "new_full": 9,
+            "new_cases": 24,
+            "masked_tokens": {
+              "mean": 70.59375,
+              "median": 71.5,
+              "minimum": 62,
+              "maximum": 72
+            }
+          }
+        }
+      }
+    }
+  ]
+}

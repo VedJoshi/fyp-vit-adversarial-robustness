@@ -13,6 +13,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Sequence
 
 import torch
 
@@ -48,6 +49,106 @@ def evasion_loss(clf, cfg, top: int, left: int, size: int, device):
                 - s.masked_fill(~covers, float("-inf")).max(1).values)
 
     return aux
+
+
+def anchor_contains(window: int, rule: str, grid: int = config.GRID) -> torch.Tensor:
+    """(A, T) boolean: whether anchor a's block, after the border shift, holds token t."""
+    out = torch.zeros(grid * grid, grid * grid, dtype=torch.bool)
+    for a in range(grid * grid):
+        s = torch.full((1, grid * grid), -1.0)
+        s[0, a] = 1.0
+        r0, c0, h, w = rsa.RSAAttention._window_corner(None, s, window, grid, rule)
+        for r in range(int(r0), int(r0) + int(h)):
+            for c in range(int(c0), int(c0) + int(w)):
+                out[a, r * grid + c] = True
+    return out
+
+
+def union_margins(scores: torch.Tensor, contains: torch.Tensor, foot: Sequence[int],
+                  k: int, radius: int, grid: int = config.GRID) -> torch.Tensor:
+    """(B, len(foot)) smallest step margin for keeping each patch token exposed.
+
+    Walks the defence's greedy selection restricted to anchors that miss the token,
+    applying the real suppression after each choice. A row entry above zero means
+    those anchors also win unrestricted, so the real selection leaves that token
+    outside the union; zero is inconclusive.
+
+    Masked reductions use a finite -1e4 rather than -inf so no infinity reaches
+    backward, which assumes scores stay above it. Value-anomaly scores are norms
+    and cannot go negative.
+    """
+    ar = torch.arange(grid, device=scores.device)
+    floor = -1e4                                  # finite, so no inf reaches backward
+    out = []
+    for t in foot:
+        cov = contains[:, t]                                             # (A,)
+        avail = torch.ones_like(scores, dtype=torch.bool)
+        # A step with no covering anchor left cannot cover t, so it must not enter the
+        # minimum: substituting a constant there would cap a larger real margin and
+        # cut its gradient. Only steps that could still cover t bind.
+        worst = torch.ones(len(scores), device=scores.device, dtype=scores.dtype)
+        bound = torch.zeros(len(scores), dtype=torch.bool, device=scores.device)
+        for _ in range(k):
+            free_non, free_cov = avail & ~cov, avail & cov
+            exposing, pick = scores.masked_fill(~free_non, floor).max(1)
+            covering = scores.masked_fill(~free_cov, floor).max(1).values
+            binds = free_cov.any(1)
+            m = exposing - covering
+            worst = torch.where(binds & bound, torch.minimum(worst, m),
+                                torch.where(binds, m, worst))
+            bound = bound | binds
+            # No exposing anchor left: this token cannot be kept out of the union.
+            worst = torch.where(free_non.any(1), worst, -torch.ones_like(worst))
+            near_r = (ar[None, :] - (pick // grid)[:, None]).abs() < radius
+            near_c = (ar[None, :] - (pick % grid)[:, None]).abs() < radius
+            avail = avail & ~(near_r[:, :, None] & near_c[:, None, :]).flatten(1)
+        out.append(worst)
+    return torch.stack(out, dim=1)
+
+
+def union_evasion_loss(clf, cfg, top: int, left: int, size: int, device):
+    """Margin that drives the greedy union to leave one patch token exposed.
+
+    For one patch token, walk the defence's own selection: at each step take the
+    highest-scoring available anchor whose block misses that token, then apply the
+    real suppression. The step's margin is that anchor's score minus the best
+    still-available anchor that does cover the token. Every margin strictly
+    positive makes each of those anchors the highest-scoring available anchor
+    outright, so the real greedy selection makes the same choices and the token
+    stays outside the union. Exposing one token is enough; the returned value is
+    the largest such margin over the patch's tokens.
+
+    Unlike a rank-k margin over individually non-covering anchors, this cannot be
+    satisfied by windows that miss the patch singly and cover it jointly.
+
+    A tie between a covering and a missing anchor gives margin zero, so only zero
+    margins are inconclusive; ties among missing anchors resolve to the same lower
+    index in both this walk and the defence. Exposing a token is still not
+    misclassification, so success is read from the prediction and escape from
+    `union_mask_escaped` on the returned candidate.
+    """
+    if cfg.n_windows < 2:
+        raise ValueError("union_evasion_loss is for a multi-window config; "
+                         "use evasion_loss for a single block")
+    k, radius = cfg.n_windows, cfg.radius
+    contains = anchor_contains(cfg.window, cfg.window_rule).to(device)
+    foot = metrics.patch_token_indices(top, left, size, include_cls_offset=False)
+
+    def aux(adv: torch.Tensor) -> torch.Tensor:
+        s = selection_scores(clf, adv, cfg)                              # (B, A)
+        return union_margins(s, contains, foot, k, radius).max(1).values
+
+    return aux
+
+
+def union_mask_escaped(clf, x: torch.Tensor, cfg, top: int, left: int,
+                       size: int) -> torch.Tensor:
+    """Whether the defence's union mask leaves any patch token exposed."""
+    contains = anchor_contains(cfg.window, cfg.window_rule).to(x.device)
+    foot = metrics.patch_token_indices(top, left, size, include_cls_offset=False)
+    with torch.no_grad():
+        sel = rsa.nms_anchors(selection_scores(clf, x, cfg), cfg.n_windows, cfg.radius)
+    return ~contains[sel][:, :, foot].any(1).all(1)
 
 
 def mask_escaped(clf, x: torch.Tensor, cfg, top: int, left: int, size: int) -> torch.Tensor:
