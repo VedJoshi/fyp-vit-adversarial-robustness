@@ -1,0 +1,246 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-18T03:04:14+00:00",
+    "git_commit": "6a10cf4",
+    "git_dirty": true,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 128,
+    "attack_steps": 100,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true,
+    "full_sample": false
+  },
+  "purpose": "offline screen of neighbour-aware statistics on block-0 value vectors; mask geometry unchanged, only the ranking differs",
+  "source": "selection_values_dev.pt and selection_capture_dev.pt",
+  "caveat": "coverage is geometric and measured on attacks optimised against the argmax, so it is a transfer quantity; it is not recovered accuracy and no rule here has been attacked adaptively",
+  "gate": {
+    "cover_w0_min": 90.0,
+    "cover_w05_min": 35.0,
+    "note": "discretionary project-management gate fixed before the vectors existed; passing it justifies classification replay only"
+  },
+  "settings": {
+    "ks": [
+      4,
+      6,
+      8
+    ],
+    "far_ks": [
+      1,
+      4,
+      8
+    ],
+    "distance": "per-head L2, averaged over heads",
+    "size": 20,
+    "steps": 100,
+    "weights": [
+      0.0,
+      0.5
+    ],
+    "window": 3,
+    "window_rule": "centred",
+    "score_frame": "global",
+    "freeze_mask_after": 0
+  },
+  "rules": {
+    "max": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 95.3125,
+          "w0.5": 3.90625
+        },
+        "0,0": {
+          "w0.0": 98.4375,
+          "w0.5": 8.59375
+        },
+        "100,20": {
+          "w0.0": 93.75,
+          "w0.5": 21.09375
+        },
+        "140,160": {
+          "w0.0": 96.09375,
+          "w0.5": 7.03125
+        }
+      },
+      "cover_w0.0": 95.8984375,
+      "cover_w0.5": 10.15625,
+      "clean_moved_pct": 0.0,
+      "passes_gate": false
+    },
+    "monotone_null": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 95.3125,
+          "w0.5": 3.90625
+        },
+        "0,0": {
+          "w0.0": 98.4375,
+          "w0.5": 8.59375
+        },
+        "100,20": {
+          "w0.0": 93.75,
+          "w0.5": 21.09375
+        },
+        "140,160": {
+          "w0.0": 96.09375,
+          "w0.5": 7.03125
+        }
+      },
+      "cover_w0.0": 95.8984375,
+      "cover_w0.5": 10.15625,
+      "clean_moved_pct": 0.0,
+      "passes_gate": false
+    },
+    "knn4": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 96.875,
+          "w0.5": 10.15625
+        },
+        "0,0": {
+          "w0.0": 98.4375,
+          "w0.5": 14.84375
+        },
+        "100,20": {
+          "w0.0": 94.53125,
+          "w0.5": 25.78125
+        },
+        "140,160": {
+          "w0.0": 96.875,
+          "w0.5": 14.84375
+        }
+      },
+      "cover_w0.0": 96.6796875,
+      "cover_w0.5": 16.40625,
+      "clean_moved_pct": 50.78125,
+      "passes_gate": false
+    },
+    "knn6": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 96.875,
+          "w0.5": 10.9375
+        },
+        "0,0": {
+          "w0.0": 99.21875,
+          "w0.5": 14.0625
+        },
+        "100,20": {
+          "w0.0": 95.3125,
+          "w0.5": 25.78125
+        },
+        "140,160": {
+          "w0.0": 97.65625,
+          "w0.5": 14.84375
+        }
+      },
+      "cover_w0.0": 97.265625,
+      "cover_w0.5": 16.40625,
+      "clean_moved_pct": 49.21875,
+      "passes_gate": false
+    },
+    "knn8": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 96.875,
+          "w0.5": 10.9375
+        },
+        "0,0": {
+          "w0.0": 99.21875,
+          "w0.5": 13.28125
+        },
+        "100,20": {
+          "w0.0": 95.3125,
+          "w0.5": 25.78125
+        },
+        "140,160": {
+          "w0.0": 96.875,
+          "w0.5": 13.28125
+        }
+      },
+      "cover_w0.0": 97.0703125,
+      "cover_w0.5": 15.8203125,
+      "clean_moved_pct": 42.1875,
+      "passes_gate": false
+    },
+    "knnfar1": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 98.4375,
+          "w0.5": 16.40625
+        },
+        "0,0": {
+          "w0.0": 99.21875,
+          "w0.5": 14.84375
+        },
+        "100,20": {
+          "w0.0": 96.875,
+          "w0.5": 29.6875
+        },
+        "140,160": {
+          "w0.0": 98.4375,
+          "w0.5": 17.96875
+        }
+      },
+      "cover_w0.0": 98.2421875,
+      "cover_w0.5": 19.7265625,
+      "clean_moved_pct": 66.40625,
+      "passes_gate": false
+    },
+    "knnfar4": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 96.875,
+          "w0.5": 11.71875
+        },
+        "0,0": {
+          "w0.0": 98.4375,
+          "w0.5": 14.0625
+        },
+        "100,20": {
+          "w0.0": 95.3125,
+          "w0.5": 24.21875
+        },
+        "140,160": {
+          "w0.0": 99.21875,
+          "w0.5": 14.0625
+        }
+      },
+      "cover_w0.0": 97.4609375,
+      "cover_w0.5": 16.015625,
+      "clean_moved_pct": 51.5625,
+      "passes_gate": false
+    },
+    "knnfar8": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 96.09375,
+          "w0.5": 10.9375
+        },
+        "0,0": {
+          "w0.0": 99.21875,
+          "w0.5": 11.71875
+        },
+        "100,20": {
+          "w0.0": 95.3125,
+          "w0.5": 25.0
+        },
+        "140,160": {
+          "w0.0": 97.65625,
+          "w0.5": 13.28125
+        }
+      },
+      "cover_w0.0": 97.0703125,
+      "cover_w0.5": 15.234375,
+      "clean_moved_pct": 38.28125,
+      "passes_gate": false
+    }
+  },
+  "passed": []
+}
