@@ -1,7 +1,7 @@
 {
   "_meta": {
-    "written_utc": "2026-09-18T09:28:07+00:00",
-    "git_commit": "d51d6a8",
+    "written_utc": "2026-09-18T09:50:07+00:00",
+    "git_commit": "547b607",
     "git_dirty": true,
     "scale": "full",
     "dataset": "imagenet100",
@@ -21,7 +21,8 @@
   "sources": {
     "finder_runs": [
       "finder_attack_dev_859868",
-      "finder_attack_smooth_dev_859868"
+      "finder_attack_smooth_dev_859868",
+      "finder_attack_smoothfix_dev_859926"
     ],
     "arm5": "selection_attack_arm5_matched_859868",
     "replay": "selection_replay_finder_dev"
@@ -43,13 +44,13 @@
       "attacked_failures": 57
     },
     "finder_tv": {
-      "survives": 96,
-      "survives_pct": 75.0,
+      "survives": 82,
+      "survives_pct": 64.0625,
       "clean_accuracy": 92.1875,
-      "attacked_failures": 32
+      "attacked_failures": 46
     }
   },
-  "margin_points": 19.53125,
+  "margin_points": 8.59375,
   "clean_drop_points": 0.78125,
-  "promote": true
+  "promote": false
 }
