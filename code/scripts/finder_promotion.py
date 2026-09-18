@@ -42,21 +42,23 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--finder-runs", default="finder_attack_dev_859868,"
                                              "finder_attack_smooth_dev_859868")
-    ap.add_argument("--arm5-run", default="selection_attack_arm5_matched_859868")
+    ap.add_argument("--arm5-runs", default="selection_attack_arm5_matched_859868",
+                    help="comma-separated; failures are unioned across them, never "
+                         "substituted, so adding a run can only lower arm 5 survival")
     ap.add_argument("--replay", default="selection_replay_finder_dev")
     ap.add_argument("--finder-defence", default="finder_tv")
     ap.add_argument("--out", default="finder_promotion")
     args = ap.parse_args()
 
     finder_runs = [load(n) for n in args.finder_runs.split(",")]
-    arm5 = load(args.arm5_run)
+    arm5_runs = [load(nm) for nm in args.arm5_runs.split(',')]
     replay = load(args.replay)
     n = len(finder_runs[0]["by_weight"]["0.0"][list(finder_runs[0]["by_weight"]["0.0"])[0]]
             ["correct"])
 
     pilot_locs = {loc for r in finder_runs for w in r["by_weight"] for loc in r["by_weight"][w]}
     replay_locs = set(replay["per_defence"]["base"]["by"])
-    arm5_locs = set(arm5["per_location"])
+    arm5_locs = set.intersection(*(set(r["per_location"]) for r in arm5_runs))
     common = sorted(pilot_locs & replay_locs & arm5_locs)
     print(f"common locations: {common}  ({len(pilot_locs)} in the pilots, "
           f"{len(replay_locs)} in the replay, {len(arm5_locs)} in the arm 5 run)")
@@ -74,13 +76,14 @@ def main():
         if ix != ref:
             raise SystemExit(f"{name} and {ref_name} are different image draws; "
                              f"positional unions across them would be meaningless")
-    missing = [n for n in [args.arm5_run] + args.finder_runs.split(",")
+    missing = [n for n in args.arm5_runs.split(",") + args.finder_runs.split(",")
                if n not in identities]
     print(f"image identities verified across {len(identities)} of "
           f"{1 + len(finder_runs) + 1} sources"
           + (f"; NOT verifiable for {missing} (no index recorded, "
              f"re-run to record one)" if missing else ""))
-    for name, r in [(args.arm5_run, arm5)] + list(zip(args.finder_runs.split(","), finder_runs)):
+    for name, r in (list(zip(args.arm5_runs.split(","), arm5_runs))
+                    + list(zip(args.finder_runs.split(","), finder_runs))):
         got = r["settings"]["n_images"] if "n_images" in r["settings"] else None
         if got is not None and got != n:
             raise SystemExit(f"{name} ran {got} images against {n}")
@@ -100,15 +103,22 @@ def main():
 
     # Arm 5: failures from every evasion weight, plus the same saved transfers.
     arm5_fail: set[int] = set()
-    for loc, byw in arm5["per_location"].items():
-        if loc in common:
-            for w, v in byw.items():
-                arm5_fail |= set(v["wrong"])
+    for r in arm5_runs:
+        for loc, byw in r["per_location"].items():
+            if loc in common:
+                for w, v in byw.items():
+                    arm5_fail |= set(v["wrong"])
     br = replay["per_defence"]["base"]
     for loc in common:
         for w, v in br["by"][loc].items():
             arm5_fail |= {i for i, ok in enumerate(v["correct"]) if not ok}
     arm5_clean_wrong = {i for i, ok in enumerate(br["clean_ok"]) if not ok}
+    arm5_weights = sorted({float(w) for r in arm5_runs
+                           for byw in r["per_location"].values() for w in byw})
+    finder_settings = sum(len(r["by_weight"]) for r in finder_runs)
+    print(f"budget: arm 5 {len(arm5_weights)} weights over {len(arm5_runs)} run(s); "
+          f"finder {finder_settings} weight-and-start combinations. Unequal budgets "
+          f"make this a sensitivity check, not a control.")
 
     base_clean = 100.0 * (n - len(arm5_clean_wrong)) / n
     rows = {}
@@ -141,12 +151,15 @@ def main():
 
     results.save(args.out, dict(
         purpose="matched failure-set union per defence, then the frozen promotion gate",
-        sources=dict(finder_runs=args.finder_runs.split(","), arm5=args.arm5_run,
+        sources=dict(finder_runs=args.finder_runs.split(","),
+                     arm5_runs=args.arm5_runs.split(","),
                      replay=args.replay),
         caveat="development images and the locations both sides ran; not the "
                "512-image 121-location protocol. Attack-search budgets are not equal "
-               "between the two defences: the finder was given five evasion weights "
-               "and arm 5 four, so the finder faced the larger search.",
+               "between the two defences, so this is a sensitivity check and not a "
+               "control. Adding attacks against one side can only lower that side's "
+               "survival, so a verdict change from a new comparator run is one-way and "
+               "must be read as such.",
         common_locations=common, gate=dict(margin_points=GATE_MARGIN,
                                            clean_drop_points=GATE_CLEAN_DROP),
         rows=rows, margin_points=margin, clean_drop_points=clean_drop,
