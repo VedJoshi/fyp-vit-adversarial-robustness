@@ -1,0 +1,172 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-18T03:12:50+00:00",
+    "git_commit": "e176f2d",
+    "git_dirty": true,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 128,
+    "attack_steps": 100,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true,
+    "full_sample": false
+  },
+  "purpose": "offline screen of input-space statistics as RSA's selection rule; mask geometry unchanged, only the ranking differs",
+  "source": "selection_capture_dev.pt plus images reconstructed from the saved patches",
+  "caveat": "coverage is geometric and measured on attacks optimised against the argmax, so it is a transfer quantity; it is not recovered accuracy and no rule here has been attacked adaptively",
+  "definitions": {
+    "tv": "mean absolute horizontal and vertical pixel difference within the tile",
+    "blur": "mean absolute difference from a fixed 5x5 Gaussian blur, sigma 1.0, computed on the whole image then averaged into tiles",
+    "colour": "tile mean colour's distance from the image mean colour",
+    "scale": "the model's normalised input scale, identical across rules and images"
+  },
+  "gate": {
+    "cover_w0_min": 90.0,
+    "cover_w05_min": 35.0,
+    "note": "discretionary resource-allocation rule fixed before the run; passing it justifies local classification replay only, and only a useful classification gain at an acceptable clean cost earns a pilot"
+  },
+  "settings": {
+    "size": 20,
+    "steps": 100,
+    "weights": [
+      0.0,
+      0.5
+    ],
+    "window": 3,
+    "window_rule": "centred",
+    "score_frame": "global",
+    "freeze_mask_after": 0
+  },
+  "rules": {
+    "max": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 95.3125,
+          "w0.5": 3.90625
+        },
+        "0,0": {
+          "w0.0": 98.4375,
+          "w0.5": 8.59375
+        },
+        "100,20": {
+          "w0.0": 93.75,
+          "w0.5": 21.09375
+        },
+        "140,160": {
+          "w0.0": 96.09375,
+          "w0.5": 7.03125
+        }
+      },
+      "cover_w0.0": 95.8984375,
+      "cover_w0.5": 10.15625,
+      "clean_moved_pct": 0.0,
+      "passes_gate": false
+    },
+    "monotone_null": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 95.3125,
+          "w0.5": 3.90625
+        },
+        "0,0": {
+          "w0.0": 98.4375,
+          "w0.5": 8.59375
+        },
+        "100,20": {
+          "w0.0": 93.75,
+          "w0.5": 21.09375
+        },
+        "140,160": {
+          "w0.0": 96.09375,
+          "w0.5": 7.03125
+        }
+      },
+      "cover_w0.0": 95.8984375,
+      "cover_w0.5": 10.15625,
+      "clean_moved_pct": 0.0,
+      "passes_gate": false
+    },
+    "tv": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        },
+        "0,0": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        },
+        "100,20": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        },
+        "140,160": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        }
+      },
+      "cover_w0.0": 100.0,
+      "cover_w0.5": 100.0,
+      "clean_moved_pct": 64.84375,
+      "passes_gate": true
+    },
+    "blur": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        },
+        "0,0": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        },
+        "100,20": {
+          "w0.0": 100.0,
+          "w0.5": 99.21875
+        },
+        "140,160": {
+          "w0.0": 100.0,
+          "w0.5": 100.0
+        }
+      },
+      "cover_w0.0": 100.0,
+      "cover_w0.5": 99.8046875,
+      "clean_moved_pct": 67.96875,
+      "passes_gate": true
+    },
+    "colour": {
+      "by_location": {
+        "60,60": {
+          "w0.0": 2.34375,
+          "w0.5": 1.5625
+        },
+        "0,0": {
+          "w0.0": 3.125,
+          "w0.5": 2.34375
+        },
+        "100,20": {
+          "w0.0": 0.78125,
+          "w0.5": 0.78125
+        },
+        "140,160": {
+          "w0.0": 2.34375,
+          "w0.5": 1.5625
+        }
+      },
+      "cover_w0.0": 2.1484375,
+      "cover_w0.5": 1.5625,
+      "clean_moved_pct": 100.0,
+      "passes_gate": false
+    }
+  },
+  "passed": [
+    "tv",
+    "blur"
+  ]
+}

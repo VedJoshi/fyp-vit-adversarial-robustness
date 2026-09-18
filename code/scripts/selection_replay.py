@@ -36,6 +36,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import inputspace_screen  # noqa: E402
 from fyp import attacks, config, data, metrics, models, results, rsa  # noqa: E402
 
 DEFENCES = {
@@ -44,7 +45,23 @@ DEFENCES = {
     "single6": dict(window=6),
     "oracle_window": dict(oracle="window"),
     "oracle_extent": dict(oracle="extent"),
+    "finder_tv": dict(finder="tv"),
+    "finder_blur": dict(finder="blur"),
 }
+
+
+def make_finder(name: str, window: int):
+    """Selection from the input pixels, installed as a mask the defence reuses.
+
+    The statistic is the one inputspace_screen predeclared; the geometry is the
+    defence's own centred block, so the only difference from base is the ranking.
+    """
+    fn = inputspace_screen.RULES[name]
+
+    def choose(xb):
+        s = fn(xb, inputspace_screen.blur_residual(xb))
+        return rsa.centred_token_mask(s.argmax(1), window)
+    return choose
 
 
 def masked_counts(handle) -> list[int]:
@@ -52,10 +69,13 @@ def masked_counts(handle) -> list[int]:
     return handle.masks()[0][:, 1:].sum(1).tolist()
 
 
-def run(clf, handle, x, y, bs: int) -> tuple[list[bool], list[int]]:
+def run(clf, handle, x, y, bs: int, finder=None) -> tuple[list[bool], list[int]]:
     ok, sizes = [], []
     for i in range(0, len(x), bs):
-        ok += attacks.accuracy(clf, x[i:i + bs], y[i:i + bs]).tolist()
+        xb = x[i:i + bs]
+        if finder is not None:
+            handle.set_mask(finder(xb))
+        ok += attacks.accuracy(clf, xb, y[i:i + bs]).tolist()
         sizes += masked_counts(handle)
     return ok, sizes
 
@@ -117,11 +137,13 @@ def main():
     for name in names:
         opts = dict(DEFENCES[name])
         oracle = opts.pop("oracle", None)
+        finder_name = opts.pop("finder", None)
         cfg = dataclasses.replace(base_cfg, **opts)
         with rsa.enable(clf, cfg) as handle:
+            finder = make_finder(finder_name, cfg.window) if finder_name else None
             clean_by_loc = {}
             if oracle is None:
-                clean_ok, clean_sizes = run(clf, handle, x_all, y_all, bs)
+                clean_ok, clean_sizes = run(clf, handle, x_all, y_all, bs, finder)
             else:
                 # An oracle has no mask without a patch, so its clean cost is
                 # measured once per location with the mask where the patch would
@@ -138,12 +160,12 @@ def main():
                     per_loc.append(ok)
                 clean_ok = [all(o[i] for o in per_loc) for i in range(n)]
                 handle.clear_oracle()
-            rec = {"config": cfg.as_dict(), "oracle": oracle,
+            rec = {"config": cfg.as_dict(), "oracle": oracle, "finder": finder_name,
                    "clean_by_location": clean_by_loc, "clean_ok": clean_ok,
                    "clean_accuracy": pct(clean_ok),
                    "clean_masked_tokens": sum(clean_sizes) / len(clean_sizes),
                    "by": {}}
-            shape = (f"oracle {oracle}" if oracle
+            shape = (f"oracle {oracle}" if oracle else f"finder {finder_name}" if finder_name
                      else f"{cfg.n_windows} x {cfg.window}x{cfg.window}"
                            f"{f' r{cfg.radius}' if cfg.n_windows > 1 else ''}")
             print(f"{name:>13}  {shape:<16}  "
@@ -158,7 +180,7 @@ def main():
                     adv = x_all.clone()
                     adv[:, :, top:top + size, left:left + size] = (
                         byw[str(float(w))]["patch"].to(device))
-                    ok, sizes = run(clf, handle, adv, y_all, bs)
+                    ok, sizes = run(clf, handle, adv, y_all, bs, finder)
                     if oracle is not None:
                         # A window oracle masks 9 tokens and so does the score
                         # argmax; only the positions distinguish them, so check

@@ -277,13 +277,7 @@ class RSAAttention(nn.Module):
             rc = torch.stack([idx[:, 0] // g, idx[:, 0] % g], dim=-1)
         elif self.cfg.n_windows > 1:
             anchors = nms_anchors(scores, self.cfg.n_windows, self.cfg.radius, g)
-            lo = (w - 1) // 2
-            r0 = (anchors // g - lo).clamp(0, g - w)                   # (B, k)
-            c0 = (anchors % g - lo).clamp(0, g - w)
-            ar = torch.arange(g, device=v.device)
-            rows = (ar >= r0[..., None]) & (ar < (r0 + w)[..., None])  # (B, k, G)
-            cols = (ar >= c0[..., None]) & (ar < (c0 + w)[..., None])
-            grid = (rows[:, :, :, None] & cols[:, :, None, :]).any(1)  # (B, G, G)
+            grid, r0, c0 = centred_grid(anchors, w, g)
             rc = torch.stack([r0[:, 0], c0[:, 0]], dim=-1)             # highest anchor
         else:
             r0, c0, h, wd = self._window_corner(scores, w, g, rule)
@@ -428,6 +422,32 @@ def _candidate_windows(rule: str, window: int,
             for r in range(grid - h + 1) for c in range(grid - w + 1)]
 
 
+def centred_grid(anchors: torch.Tensor, window: int,
+                 grid: int = config.GRID) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Centred blocks around each anchor, as a (B, G, G) union plus their corners.
+
+    anchors is (B, k) of token indices excluding CLS. A block at a border shifts
+    inward, so blocks near an edge can overlap and only the union is meaningful.
+    """
+    if anchors.dim() == 1:
+        anchors = anchors[:, None]
+    lo = (window - 1) // 2
+    r0 = (anchors // grid - lo).clamp(0, grid - window)                    # (B, k)
+    c0 = (anchors % grid - lo).clamp(0, grid - window)
+    ar = torch.arange(grid, device=anchors.device)
+    rows = (ar >= r0[..., None]) & (ar < (r0 + window)[..., None])         # (B, k, G)
+    cols = (ar >= c0[..., None]) & (ar < (c0 + window)[..., None])
+    return (rows[:, :, :, None] & cols[:, :, None, :]).any(1), r0, c0
+
+
+def centred_token_mask(anchors: torch.Tensor, window: int,
+                       grid: int = config.GRID) -> torch.Tensor:
+    """(B, N) centred-block mask with the CLS column prepended and never masked."""
+    g, _, _ = centred_grid(anchors, window, grid)
+    cls_col = torch.zeros(g.shape[0], 1, dtype=torch.bool, device=g.device)
+    return torch.cat([cls_col, g.reshape(g.shape[0], -1)], dim=1)
+
+
 def oracle_window(top: int, left: int, size: int, window: int,
                   window_rule: str = DEFAULT_WINDOW_RULE,
                   grid: int = config.GRID) -> tuple[int, int, int, int]:
@@ -498,6 +518,16 @@ class RSAHandle:
         for m in self.modules:
             m.oracle_mask = mask
         return mask
+
+    def set_mask(self, mask: torch.Tensor) -> None:
+        """Install a (B, N) or (1, N) mask, bypassing scoring on every layer.
+
+        The primitive `set_oracle` uses. A selection rule that cannot be computed
+        inside the attention module — one reading the input pixels, say — builds
+        its mask outside and installs it here.
+        """
+        for m in self.modules:
+            m.oracle_mask = mask
 
     def clear_oracle(self) -> None:
         """Restore score-based window selection on every layer."""
