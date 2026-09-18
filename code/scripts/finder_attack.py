@@ -111,7 +111,9 @@ def main():
     ap.add_argument("--steps", type=int, default=100)
     ap.add_argument("--weights", default=",".join(str(w) for w in WEIGHTS))
     ap.add_argument("--smooth-init", action="store_true",
-                    help="start the patch from a blurred draw instead of the default")
+                    help="start the patch from a blurred draw (init='given') instead of "
+                         "AutoPGD's uniform draw; without init='given' the blurred patch "
+                         "is overwritten and the arm is only a reseed")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--out", default="finder_attack_dev")
     args = ap.parse_args()
@@ -158,6 +160,7 @@ def main():
                     start = smooth_init(xb, top, left, args.size) if args.smooth_init else xb
                     adv = attacks.patch_autopgd(clf, start, yb, top=top, left=left,
                                                 size=args.size, steps=args.steps,
+                                                init="given" if args.smooth_init else "uniform",
                                                 aux_loss=aux, aux_weight=w)
                     ok.append(attacks.accuracy(clf, adv, yb))
                     e, t = hard_escape(args.finder, adv, top, left, args.size,

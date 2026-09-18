@@ -133,6 +133,44 @@ def check_hook_matches_external():
           f"CLS untouched, {WINDOW * WINDOW} tokens each")
 
 
+def check_given_init_reaches_the_attack():
+    """The attack starts from the supplied patch under init="given", and not otherwise.
+
+    Checks the path, not the helper: a zero-gradient model leaves the patch where
+    initialisation put it, so the returned patch is exactly the starting patch.
+    Without init="given" every branch overwrites it with its own draw, which made
+    the earlier smooth-start arm a reseed of the default arm rather than a variant.
+    """
+    from fyp import attacks
+
+    class Flat(torch.nn.Module):
+        """Logits connected to the input but scaled to zero, so the gradient is zero.
+
+        A detached constant would break backward instead of giving a zero gradient.
+        """
+
+        def forward(self, z):
+            return z.flatten(1)[:, :10] * 0.0
+
+    x = images(4)
+    y = torch.zeros(4, dtype=torch.long)
+    start = finder_attack.smooth_init(x, *LOC, SIZE)
+    want = start[:, :, LOC[0]:LOC[0] + SIZE, LOC[1]:LOC[1] + SIZE]
+
+    kept = attacks.patch_autopgd(Flat(), start, y, top=LOC[0], left=LOC[1],
+                                 size=SIZE, steps=2, init="given")
+    got = kept[:, :, LOC[0]:LOC[0] + SIZE, LOC[1]:LOC[1] + SIZE]
+    assert torch.allclose(got, want, atol=1e-6),         "init='given' did not preserve the supplied patch"
+    assert torch.equal(kept[:, :, :LOC[0], :], start[:, :, :LOC[0], :]),         "the attack changed pixels outside the patch"
+
+    overwritten = attacks.patch_autopgd(Flat(), start, y, top=LOC[0], left=LOC[1],
+                                        size=SIZE, steps=2, init="uniform")
+    other = overwritten[:, :, LOC[0]:LOC[0] + SIZE, LOC[1]:LOC[1] + SIZE]
+    assert not torch.allclose(other, want, atol=1e-3),         "init='uniform' preserved the supplied patch, so this check proves nothing"
+    print("8. given init reaches attack OK  the supplied patch survives init='given' "
+          "and is overwritten by init='uniform'")
+
+
 def check_smooth_init_is_smooth():
     """The smooth initialisation really lowers patch total variation."""
     x = images(4)
@@ -154,6 +192,7 @@ def main():
     check_gradient_reaches_patch()
     check_hook_matches_external()
     check_smooth_init_is_smooth()
+    check_given_init_reaches_the_attack()
     print("\nall finder checks passed")
 
 

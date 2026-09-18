@@ -43,7 +43,11 @@ LOCS="60,60 100,20"
 srun python code/scripts/finder_attack.py --finder tv --n-images 128 \
     --locations "$LOCS" --steps 100 --out finder_attack_dev
 
-# The same finder, started from a blurred patch, in case the default init
+# The same finder, started from a blurred patch. This needs init="given" inside
+# patch_autopgd: every other branch overwrites the supplied patch, so the 859868
+# run of this arm was a reseed of the one above, not a variant. Fixed 18 Sep;
+# rerun as job 859926 writing finder_attack_smoothfix_dev.
+# Original comment: in case the default init
 # biases the search towards the high-frequency region tv separates best.
 srun python code/scripts/finder_attack.py --finder tv --n-images 128 \
     --locations "$LOCS" --steps 100 --smooth-init --out finder_attack_smooth_dev

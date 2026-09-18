@@ -261,7 +261,9 @@ def patch_autopgd(
     the patch by `patch_mask` and, at the default `eps = 1.0`, bounded only by the
     `[0,1]` pixel range. `eps < 1.0` additionally clips to an eps-ball around `x`.
 
-    `init` selects the starting patch contents. `"uniform"` draws them uniformly from
+    `init` selects the starting patch contents. `"given"` keeps whatever the caller
+    placed inside the patch region of `x`; the other modes overwrite it.
+    `"uniform"` draws them uniformly from
     `[0,1]`, which is the natural choice when the contents are unbounded and is the
     default. `"boundary"` reproduces AutoPGD's own initialisation: a uniform direction
     divided by its largest absolute coordinate, so exactly one coordinate per image
@@ -338,8 +340,14 @@ def patch_autopgd(
             t = 2 * torch.rand_like(x) - 1
             t = t / t.flatten(1).abs().amax(1).view(*bcast).clamp_min(1e-12)
             adv = project(x + eps * t)
+        elif init == "given":
+            # Start from the patch the caller already put in `x`. Without this the
+            # other branches overwrite it, so a prepared starting patch is silently
+            # discarded and only the RNG stream differs.
+            adv = project(x.clone())
         else:
-            raise ValueError(f"unknown init {init!r}; pick 'uniform' or 'boundary'")
+            raise ValueError(
+                f"unknown init {init!r}; pick 'uniform', 'boundary' or 'given'")
 
         step = torch.full((B, 1, 1, 1), step_size_factor * eps, device=x.device)
         per, grad, logits = evaluate(adv)
