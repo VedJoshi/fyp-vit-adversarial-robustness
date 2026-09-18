@@ -215,6 +215,9 @@ def main():
         settings=dict(weights=weights, locations=[f"{t},{l}" for t, l in locs],
                       steps=args.steps, size=args.size, smooth_init=args.smooth_init,
                       n_images=n, window=cfg.window, config=cfg.as_dict()),
+        index=idx,
+        indexing="index[i] is the dataset index of position i; every per-image list "
+                 "in by_weight is in this order",
         clean_accuracy=100.0 * float(clean_ok.float().mean()),
         by_weight=rec, summary=summary,
         union_survives=len(union), union_survives_pct=100.0 * len(union) / n,

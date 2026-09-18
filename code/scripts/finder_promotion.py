@@ -56,11 +56,34 @@ def main():
 
     pilot_locs = {loc for r in finder_runs for w in r["by_weight"] for loc in r["by_weight"][w]}
     replay_locs = set(replay["per_defence"]["base"]["by"])
-    common = sorted(pilot_locs & replay_locs)
+    arm5_locs = set(arm5["per_location"])
+    common = sorted(pilot_locs & replay_locs & arm5_locs)
     print(f"common locations: {common}  ({len(pilot_locs)} in the pilots, "
-          f"{len(replay_locs)} in the replay)")
+          f"{len(replay_locs)} in the replay, {len(arm5_locs)} in the arm 5 run)")
     if not common:
-        raise SystemExit("no overlapping locations; the comparison would not be matched")
+        raise SystemExit("no location is present in all three sources; the comparison "
+                         "would not be matched")
+
+    # Per-image lists are positional, so they are only unionable if every source
+    # drew the same images in the same order.
+    identities = {n: r["index"] for n, r in
+                  [(args.replay, replay)] + list(zip(args.finder_runs.split(","), finder_runs))
+                  if "index" in r}
+    ref_name, ref = next(iter(identities.items()))
+    for name, ix in identities.items():
+        if ix != ref:
+            raise SystemExit(f"{name} and {ref_name} are different image draws; "
+                             f"positional unions across them would be meaningless")
+    missing = [n for n in [args.arm5_run] + args.finder_runs.split(",")
+               if n not in identities]
+    print(f"image identities verified across {len(identities)} of "
+          f"{1 + len(finder_runs) + 1} sources"
+          + (f"; NOT verifiable for {missing} (no index recorded, "
+             f"re-run to record one)" if missing else ""))
+    for name, r in [(args.arm5_run, arm5)] + list(zip(args.finder_runs.split(","), finder_runs)):
+        got = r["settings"]["n_images"] if "n_images" in r["settings"] else None
+        if got is not None and got != n:
+            raise SystemExit(f"{name} ran {got} images against {n}")
 
     # Finder: failures from every pilot weight, plus the saved transfers in the replay.
     finder_fail: set[int] = set()
