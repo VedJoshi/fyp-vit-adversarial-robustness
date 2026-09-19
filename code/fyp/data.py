@@ -190,6 +190,12 @@ def dev_subset(ds: ImageFolder,
     return Subset(ds, sorted(random.Random(seed + 1).sample(pool, n)))
 
 
+def draw_provenance(ds: ImageFolder, seed: int = config.SEED) -> dict:
+    """What dev_subset's draw depends on, so two runs' positional lists can be compared."""
+    return dict(seed=seed, eval_n=config.SCALE.n_eval_images,
+                dataset_size=len(ds), scale=config.SCALE.name)
+
+
 def matched_positions(n_small: int, n_large: int, dataset_size: int,
                       seed: int = config.SEED) -> list[int]:
     """Map the smaller draw's positions to matching images in the larger draw.

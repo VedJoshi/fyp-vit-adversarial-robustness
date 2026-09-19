@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fyp import attacks, config, data, hooks, metrics, models, results, rsa  # noqa: E402
+from finder_attack import SEED_STRIDE, smooth_init  # noqa: E402
 from gate_a import paired_seed  # noqa: E402
 
 
@@ -178,6 +179,12 @@ def main():
                     help="space-separated top,left; development locations")
     ap.add_argument("--loss", default="dlr")
     ap.add_argument("--init", default="uniform")
+    ap.add_argument("--smooth-init", action="store_true",
+                    help="start the patch from a blurred draw, the finder pilot's second "
+                         "init family, so both defences are searched from both starts")
+    ap.add_argument("--seed-offset", type=int, default=0,
+                    help="shifts every initial patch draw and nothing else; a second run "
+                         "with a different value is a fresh random start")
     ap.add_argument("--schedule", default="counter")
     ap.add_argument("--window-rule", default="centred")
     ap.add_argument("--freeze-mask-after", type=int, default=0)
@@ -190,6 +197,9 @@ def main():
     weights = [float(w) for w in args.aux_weight.split(",") if w.strip()]
     if 0.0 not in weights:
         raise SystemExit("--aux-weight must include 0, the paired baseline arm")
+    if args.smooth_init and args.init != "uniform":
+        raise SystemExit(f"--smooth-init forces init='given'; it would silently discard "
+                         f"--init {args.init}")
     locations = [tuple(int(v) for v in loc.split(",")) for loc in args.locations.split()]
 
     config.seed_everything()
@@ -204,6 +214,7 @@ def main():
                                   freeze_mask_after=args.freeze_mask_after)
 
     sub = data.dev_subset(ds, args.n_images)
+    idx = list(sub.indices)
     xs, ys = [], []
     for x, y in data.make_loader(sub):
         xs.append(x.to(device))
@@ -239,11 +250,16 @@ def main():
                 for s in range(0, n, bs):
                     take = torch.arange(s, min(s + bs, n), device=device)
                     # Pair initial patches across auxiliary weights.
-                    config.seed_everything(paired_seed(args.size, top, left, s))
-                    adv = attacks.patch_autopgd(clf, x_all[take], y_all[take],
+                    config.seed_everything(paired_seed(args.size, top, left,
+                                                       s + SEED_STRIDE * args.seed_offset))
+                    xb = x_all[take]
+                    start = (smooth_init(xb, top, left, args.size)
+                             if args.smooth_init else xb)
+                    adv = attacks.patch_autopgd(clf, start, y_all[take],
                                                 top=top, left=left, size=args.size,
                                                 steps=args.steps, loss=args.loss,
-                                                init=args.init, schedule=args.schedule,
+                                                init="given" if args.smooth_init else args.init,
+                                                schedule=args.schedule,
                                                 aux_loss=aux, aux_weight=w)
                     adv = adv.detach()
                     bad = ~attacks.accuracy(clf, adv, y_all[take])
@@ -291,10 +307,15 @@ def main():
     results.save(args.out, dict(
         purpose="selection-aware attack against arm 5, development images",
         settings=dict(size=args.size, steps=args.steps, weights=weights,
+                      n_images=n, smooth_init=args.smooth_init,
+                      seed_offset=args.seed_offset, draw=data.draw_provenance(ds),
                       locations=[list(l) for l in locations],
                       window=cfg.window, window_rule=cfg.window_rule,
                       freeze_mask_after=cfg.freeze_mask_after,
                       dev_disjoint_from=config.SCALE.n_eval_images),
+        index=idx,
+        indexing="index[i] is the dataset index of position i; every per-image list "
+                 "is in this order",
         clean_wrong=sorted(clean_wrong),
         per_location={k: {str(w): v for w, v in d.items()} for k, d in per_loc.items()},
         summary=summary,

@@ -67,19 +67,25 @@ def main():
                          "would not be matched")
 
     # Per-image lists are positional, so they are only unionable if every source
-    # drew the same images in the same order.
-    identities = {n: r["index"] for n, r in
-                  [(args.replay, replay)] + list(zip(args.finder_runs.split(","), finder_runs))
-                  if "index" in r}
+    # drew the same images in the same order. Equal n is not enough: dev_subset's
+    # draw also depends on the seed, the eval split it excludes and the dataset size.
+    named = ([(args.replay, replay)]
+             + list(zip(args.finder_runs.split(","), finder_runs))
+             + list(zip(args.arm5_runs.split(","), arm5_runs)))
+    identities = {nm: r["index"] for nm, r in named if "index" in r}
     ref_name, ref = next(iter(identities.items()))
     for name, ix in identities.items():
         if ix != ref:
             raise SystemExit(f"{name} and {ref_name} are different image draws; "
                              f"positional unions across them would be meaningless")
-    missing = [n for n in args.arm5_runs.split(",") + args.finder_runs.split(",")
-               if n not in identities]
-    print(f"image identities verified across {len(identities)} of "
-          f"{1 + len(finder_runs) + 1} sources"
+    draws = {nm: r["settings"]["draw"] for nm, r in named
+             if "draw" in r.get("settings", {})}
+    for name, d in draws.items():
+        if d != next(iter(draws.values())):
+            raise SystemExit(f"{name} drew from a different dataset or seed: {d}")
+    missing = [nm for nm, _ in named if nm not in identities]
+    print(f"image identities verified across {len(identities)} of {len(named)} sources"
+          f", draw provenance across {len(draws)}"
           + (f"; NOT verifiable for {missing} (no index recorded, "
              f"re-run to record one)" if missing else ""))
     for name, r in (list(zip(args.arm5_runs.split(","), arm5_runs))
@@ -135,6 +141,9 @@ def main():
               f"{r['survives']:>10}/{n} = {r['survives_pct']:5.2f}% "
               f"{r['attacked_failures']:>15}")
 
+    steps_per_source = {nm: r["settings"].get("steps") for nm, r in named}
+    steps_seen = {v for v in steps_per_source.values() if v} or {0}
+
     margin = rows[args.finder_defence]["survives_pct"] - rows["arm 5"]["survives_pct"]
     clean_drop = base_clean - rows[args.finder_defence]["clean_accuracy"]
     pass_margin = margin >= GATE_MARGIN
@@ -144,7 +153,9 @@ def main():
           f"need >= {GATE_MARGIN}   {'PASS' if pass_margin else 'FAIL'}")
     print(f"  clean accuracy given up      {clean_drop:+6.2f} points   "
           f"need <= {GATE_CLEAN_DROP}   {'PASS' if pass_clean else 'FAIL'}")
-    print(f"  overall: {'PROMOTE to a full sweep' if pass_margin and pass_clean else 'DO NOT PROMOTE'}")
+    print(f"  thresholds: {'MET' if pass_margin and pass_clean else 'NOT MET'}"
+          f"  -- arithmetic on one union, not a promotion decision. Promotion also "
+          f"requires the stage table to show the attacks have settled.")
     print("\nboth sides are unions over every attack aimed at them at the common "
           "locations. Development evidence: 128 images, "
           f"{len(common)} locations, not the 121-location protocol.")
@@ -163,7 +174,11 @@ def main():
         common_locations=common, gate=dict(margin_points=GATE_MARGIN,
                                            clean_drop_points=GATE_CLEAN_DROP),
         rows=rows, margin_points=margin, clean_drop_points=clean_drop,
-        promote=bool(pass_margin and pass_clean)), n_eval_images=n, attack_steps=100)
+        thresholds_met=bool(pass_margin and pass_clean),
+        thresholds_met_note="arithmetic on one union. Promotion also requires the "
+                            "protocol's stage table to show the attacks have settled.",
+        attack_steps_per_source=steps_per_source),
+        n_eval_images=n, attack_steps=max(steps_seen))
 
 
 if __name__ == "__main__":

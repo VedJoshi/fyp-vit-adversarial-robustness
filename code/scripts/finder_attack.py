@@ -43,6 +43,7 @@ from fyp import attacks, config, data, metrics, models, results, rsa  # noqa: E4
 from gate_a import paired_seed  # noqa: E402
 
 WEIGHTS = (0.0, 0.1, 1.0, 10.0, 100.0)   # predeclared; 0.0 is classification-only
+SEED_STRIDE = 10_000                     # exceeds any n, so offsets cannot collide
 
 
 def finder_scores(name: str, x: torch.Tensor) -> torch.Tensor:
@@ -114,6 +115,11 @@ def main():
                     help="start the patch from a blurred draw (init='given') instead of "
                          "AutoPGD's uniform draw; without init='given' the blurred patch "
                          "is overwritten and the arm is only a reseed")
+    ap.add_argument("--seed-offset", type=int, default=0,
+                    help="shifts every initial patch draw, so a second run with a "
+                         "different value is a fresh random start rather than a "
+                         "repeat; patch_autopgd's own restarts do not resample "
+                         "under init='given'")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--out", default="finder_attack_dev")
     args = ap.parse_args()
@@ -156,7 +162,8 @@ def main():
                 ok, esc, tie = [], [], []
                 for i in range(0, n, bs):
                     xb, yb = x_all[i:i + bs], y_all[i:i + bs]
-                    torch.manual_seed(paired_seed(args.size, top, left, i))
+                    torch.manual_seed(paired_seed(args.size, top, left,
+                                                  i + SEED_STRIDE * args.seed_offset))
                     start = smooth_init(xb, top, left, args.size) if args.smooth_init else xb
                     adv = attacks.patch_autopgd(clf, start, yb, top=top, left=left,
                                                 size=args.size, steps=args.steps,
@@ -214,6 +221,7 @@ def main():
                   "patch token exposed, which does not imply misclassification",
         settings=dict(weights=weights, locations=[f"{t},{l}" for t, l in locs],
                       steps=args.steps, size=args.size, smooth_init=args.smooth_init,
+                      seed_offset=args.seed_offset, draw=data.draw_provenance(ds),
                       n_images=n, window=cfg.window, config=cfg.as_dict()),
         index=idx,
         indexing="index[i] is the dataset index of position i; every per-image list "

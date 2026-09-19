@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import finder_attack  # noqa: E402
 import inputspace_screen  # noqa: E402
 from fyp import config, metrics, rsa  # noqa: E402
+from gate_a import paired_seed  # noqa: E402
 
 GRID = config.GRID
 SIZE, WINDOW = 20, 3
@@ -184,6 +185,38 @@ def check_smooth_init_is_smooth():
     print("7. smooth init          OK  lowers the covering anchor's tv below the loud patch")
 
 
+def check_seed_offset_gives_a_fresh_start():
+    """--seed-offset resamples the patch, which patch_autopgd's own restarts do not.
+
+    Under init="given" every restart rebuilds the iterate from the supplied image,
+    so repeating a smooth run inside the attack retraces one trajectory. A restart
+    has to come from a separate invocation with a different offset.
+    """
+    from fyp import attacks
+
+    x = images(4)  # seeds the RNG itself, so draw it before seeding the patch
+
+    def start(offset):
+        torch.manual_seed(paired_seed(SIZE, *LOC, finder_attack.SEED_STRIDE * offset))
+        return finder_attack.smooth_init(x, *LOC, SIZE)
+
+    a, again, b = start(0), start(0), start(1)
+    box = (slice(None), slice(None), slice(LOC[0], LOC[0] + SIZE), slice(LOC[1], LOC[1] + SIZE))
+    assert torch.equal(a, again), "the same offset did not reproduce the starting patch"
+    assert not torch.allclose(a[box], b[box], atol=1e-3),         "a different offset drew the same patch"
+    assert torch.equal(a[:, :, :LOC[0], :], b[:, :, :LOC[0], :]),         "the offset changed pixels outside the patch"
+
+    class Flat(torch.nn.Module):
+        def forward(self, z):
+            return z.flatten(1)[:, :10] * 0.0
+
+    kept = attacks.patch_autopgd(Flat(), b, torch.zeros(4, dtype=torch.long),
+                                 top=LOC[0], left=LOC[1], size=SIZE, steps=2, init="given")
+    assert torch.allclose(kept[box], b[box], atol=1e-6),         "the offset patch did not reach the attack"
+    print("9. seed offset          OK  same offset reproduces, a new one resamples inside "
+          "the patch only, and reaches the attack")
+
+
 def main():
     check_score_shapes()
     check_tile_order()
@@ -193,6 +226,7 @@ def main():
     check_hook_matches_external()
     check_smooth_init_is_smooth()
     check_given_init_reaches_the_attack()
+    check_seed_offset_gives_a_fresh_start()
     print("\nall finder checks passed")
 
 

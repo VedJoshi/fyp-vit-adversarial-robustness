@@ -1,7 +1,7 @@
 {
   "_meta": {
-    "written_utc": "2026-09-18T10:34:49+00:00",
-    "git_commit": "864e827",
+    "written_utc": "2026-09-19T02:51:57+00:00",
+    "git_commit": "3e4449d",
     "git_dirty": true,
     "scale": "full",
     "dataset": "imagenet100",
@@ -55,5 +55,14 @@
   },
   "margin_points": 15.625,
   "clean_drop_points": 0.78125,
-  "promote": true
+  "thresholds_met": true,
+  "thresholds_met_note": "arithmetic on one union. Promotion also requires the protocol's stage table to show the attacks have settled.",
+  "attack_steps_per_source": {
+    "selection_replay_finder_dev": 100,
+    "finder_attack_dev_859868": 100,
+    "finder_attack_smooth_dev_859868": 100,
+    "finder_attack_smoothfix_dev_859926": 100,
+    "selection_attack_arm5_matched_859868": 100,
+    "selection_attack_arm5_wide_859966": 100
+  }
 }

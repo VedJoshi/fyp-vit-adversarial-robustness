@@ -9,10 +9,12 @@ groups of image tokens and replaces their value vectors during attention.
 
 The repository contains the evaluation code, attack implementations, reproducibility checks, and
 machine-readable results. The reproduction and gradient audit are complete. Current work tests
-whether a small inference-time change to RSA can improve resistance to selection-aware attacks
-without knowing the patch location. Multi-region masking improves classification against saved attacks on development images;
-a fresh adaptive pilot is now under review, with no completed local result yet. See [the current handoff](CODEX_Handoff.md) and
-[the defence explanation](02_direction/DEFENCE_DIRECTION_EXPLAINED_2026-09-17.md).
+whether an inference-time change to RSA can improve resistance to selection-aware attacks without
+knowing the patch location. A candidate that replaces RSA's token-anomaly selector with an
+input-space total-variation selector has been built and piloted on development images; its
+pre-registered promotion criterion returned both a pass and a fail from the same defence, images
+and locations, differing only in how hard the comparator was attacked, so the branch is recorded
+as undecided.
 
 ## Main result
 
