@@ -1,0 +1,88 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-19T06:37:30+00:00",
+    "git_commit": "1056785",
+    "git_dirty": true,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 128,
+    "attack_steps": 200,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
+    "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "is_result": true,
+    "full_sample": false
+  },
+  "purpose": "matched failure-set union per defence, then the frozen promotion gate",
+  "sources": {
+    "finder_runs": [
+      "finder_attack_dev_859868",
+      "finder_attack_smooth_dev_859868",
+      "finder_attack_smoothfix_dev_859926",
+      "finder_attack_uniform_s2",
+      "finder_attack_smooth_s2",
+      "finder_attack_uniform_s3",
+      "finder_attack_smooth_s3"
+    ],
+    "arm5_runs": [
+      "selection_attack_arm5_matched_859868",
+      "selection_attack_arm5_wide_859966",
+      "selection_attack_arm5_smooth_s1",
+      "selection_attack_arm5_low_s1",
+      "selection_attack_arm5_uniform_s2",
+      "selection_attack_arm5_smooth_s2",
+      "selection_attack_arm5_uniform_s3",
+      "selection_attack_arm5_smooth_s3"
+    ],
+    "replay": "selection_replay_finder_dev"
+  },
+  "caveat": "development images and the locations both sides ran; not the 512-image 121-location protocol. Attack-search budgets are not equal between the two defences, so this is a sensitivity check and not a control. Adding attacks against one side can only lower that side's survival, so a verdict change from a new comparator run is one-way and must be read as such.",
+  "common_locations": [
+    "100,20",
+    "60,60"
+  ],
+  "gate": {
+    "margin_points": 10.0,
+    "clean_drop_points": 2.0
+  },
+  "rows": {
+    "arm 5": {
+      "survives": 19,
+      "survives_pct": 14.84375,
+      "clean_accuracy": 92.96875,
+      "attacked_failures": 109
+    },
+    "finder_tv": {
+      "survives": 62,
+      "survives_pct": 48.4375,
+      "clean_accuracy": 92.1875,
+      "attacked_failures": 66
+    }
+  },
+  "margin_points": 33.59375,
+  "clean_drop_points": 0.78125,
+  "thresholds_met": true,
+  "thresholds_met_note": "arithmetic on one union. Promotion also requires the protocol's stage table to show the attacks have settled.",
+  "attack_steps_per_source": {
+    "selection_replay_finder_dev": 100,
+    "finder_attack_dev_859868": 100,
+    "finder_attack_smooth_dev_859868": 100,
+    "finder_attack_smoothfix_dev_859926": 100,
+    "finder_attack_uniform_s2": 100,
+    "finder_attack_smooth_s2": 100,
+    "finder_attack_uniform_s3": 200,
+    "finder_attack_smooth_s3": 200,
+    "selection_attack_arm5_matched_859868": 100,
+    "selection_attack_arm5_wide_859966": 100,
+    "selection_attack_arm5_smooth_s1": 100,
+    "selection_attack_arm5_low_s1": 100,
+    "selection_attack_arm5_uniform_s2": 100,
+    "selection_attack_arm5_smooth_s2": 100,
+    "selection_attack_arm5_uniform_s3": 200,
+    "selection_attack_arm5_smooth_s3": 200
+  }
+}
