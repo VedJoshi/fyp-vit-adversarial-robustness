@@ -43,17 +43,15 @@ LOCS="60,60 100,20"
 srun python code/scripts/finder_attack.py --finder tv --n-images 128 \
     --locations "$LOCS" --steps 100 --out finder_attack_dev
 
-# The same finder, started from a blurred patch. This needs init="given" inside
-# patch_autopgd: every other branch overwrites the supplied patch, so the 859868
-# run of this arm was a reseed of the one above, not a variant. Fixed 18 Sep;
-# rerun as job 859926 writing finder_attack_smoothfix_dev.
-# Original comment: in case the default init
-# biases the search towards the high-frequency region tv separates best.
+# The same finder, started from a blurred patch, in case the default init biases
+# the search towards the high-frequency region tv separates best. This needs
+# init="given" inside patch_autopgd: every other branch overwrites the supplied
+# patch, silently turning this into a reseed of the run above instead of a variant.
 srun python code/scripts/finder_attack.py --finder tv --n-images 128 \
     --locations "$LOCS" --steps 100 --smooth-init --out finder_attack_smooth_dev
 
 # Arm 5 under its own block-0 evasion attack, matched on everything else.
-# A separate --out: selection_attack_dev.json is the canonical 14 September record.
+# A separate --out keeps this distinct from the canonical selection_attack_dev.json.
 srun python code/scripts/selection_attack.py --n-images 128 \
     --locations "$LOCS" --steps 100 --aux-weight 0,0.5,2,8 \
     --out selection_attack_arm5_matched

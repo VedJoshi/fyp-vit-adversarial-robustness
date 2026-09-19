@@ -127,9 +127,8 @@ def patch_pgd(
     steps, adaptive step size - which is not implemented here.
 
     `aux_loss` takes the adversarial image and returns a scalar maximised alongside
-    cross-entropy, for an Attention-Fool-style term. In Patch-Fool's ablation, summing
-    an attention term onto CE without per-layer gradient surgery made their attack
-    three times worse than omitting it.
+    cross-entropy, for an attention-aware term; see `patch_fool` for why summing such
+    a term in without per-layer gradient surgery weakens the attack.
     """
     steps = steps or config.SCALE.attack_steps
     mask = patch_mask(x.shape, top, left, size, x.device)
@@ -188,13 +187,10 @@ def _check_oscillation(loss_steps: torch.Tensor, j: int, k: int, rho: float) -> 
     that count is at most `rho * k`.
 
     At the first checkpoint `j - k` is negative, so the last comparison in the window
-    indexes the tail of `loss_steps`, which is still the zeros it was allocated with,
-    and reduces to `loss_steps[0] > 0`. That is what the fra31 reference does, and it
-    is reproduced here rather than corrected: the first checkpoint decides whether the
-    step size halves for the remaining 78 steps, and a Table 1 reproduction has to
-    take the same branch the published numbers took. Clipping the window to the steps
-    that actually ran changes the threshold from `k * rho` to `j * rho` and flips the
-    decision whenever the increase count falls between the two.
+    indexes the tail of `loss_steps`, still the zeros it was allocated with, reducing
+    to `loss_steps[0] > 0`. This matches the fra31 reference rather than clipping the
+    window to the steps that actually ran; clipping would change the threshold from
+    `k * rho` to `j * rho` and can flip the halving decision at the first checkpoint.
     """
     inc = sum((loss_steps[j - c] > loss_steps[j - c - 1]).float() for c in range(k))
     return (inc <= k * rho).float()
@@ -251,11 +247,9 @@ def patch_autopgd(
 
     An example sitting on a loss plateau keeps its step size for one extra iteration
     under one of them and not the other, and worst-location aggregation can turn a
-    single-location difference into a robust/non-robust flip. `"counter"` is the default
-    because it is what every result before 8 September 2026 used; `"released"` is what a
-    "same attack as Table 1" claim needs, alongside `rsa.RSAConfig.released`. The
-    difference has not been measured on real data - `scripts/gate_a.py --schedule
-    released` is how to measure it.
+    single-location difference into a robust/non-robust flip. `"counter"` is the
+    default; `"released"` is what a "same attack as Table 1" claim needs, alongside
+    `rsa.RSAConfig.released`.
 
     The threat model is the patch, not an eps-ball: the perturbation is confined to
     the patch by `patch_mask` and, at the default `eps = 1.0`, bounded only by the
@@ -273,9 +267,8 @@ def patch_autopgd(
 
     `loss` is a key of `LOSSES` or a callable `(logits, y) -> per-example tensor`.
     `aux_loss` takes the adversarial image and returns a per-example tensor added to
-    the objective, for an RSA-aware stealth term. In Patch-Fool's ablation, summing an
-    attention term onto the classification loss without per-layer gradient surgery made
-    their attack three times worse than omitting it.
+    the objective; see `patch_fool` for why summing such a term in without per-layer
+    gradient surgery weakens the attack.
 
     Returns, per example, the point that misclassified if the attack found one, and
     otherwise the highest-loss point seen. The reference returns its initialisation
@@ -528,9 +521,9 @@ def patch_fool(
        row `i` at each layer in `attn_layers`, which is maximised when all attention
        lands on the chosen patch `p`. The reference writes this as
        `F.nll_loss(-log a, p)`; `nll_loss` negates its input, so the two are the same
-       term. Taking `-log a[i, p]` instead - as this function did before 8 September
-       2026 - maximises it by driving attention *off* the patch, which is the opposite
-       attack. `scripts/validate_patch_fool.py` now measures the direction.
+       term. Taking `-log a[i, p]` instead maximises it by driving attention *off* the
+       patch, the opposite attack, and cross-entropy alone can still flip the class, so
+       the failure is invisible to a classification-only check.
     3. **Per-layer gradient surgery.** Each layer's attention gradient is taken
        separately, projected off the cross-entropy gradient where the two conflict
        (`_pcgrad`), and only then accumulated at `atten_loss_weight`. Summing the terms
@@ -600,13 +593,8 @@ def patch_fool(
 
         for layer in attn_layers:
             w = cap[layer].weights.mean(dim=1)                    # (B, N, N), head mean
-            # `log a[i, p]`, not `-log a[i, p]`. The objective is *maximised* below
-            # (`delta.grad = -grad`), and the term has to grow as attention moves onto
-            # the patch. The reference reaches the same sign through `F.nll_loss`,
-            # which negates its input: `nll_loss(-log a, p) = log a[p]`. Dropping that
-            # second negation makes the attention term fight the attack it is named
-            # for, and cross-entropy alone can still flip the class, so the failure is
-            # invisible to a validation that only checks classification success.
+            # `log a[i, p]`, not `-log a[i, p]` (see patch_fool docstring, item 2):
+            # the objective is *maximised* below (`delta.grad = -grad`).
             logw = torch.log(w.clamp_min(1e-12))
             idx = target.view(B, 1, 1).expand(B, w.shape[1], 1)
             attn_loss = logw.gather(2, idx).mean()

@@ -37,9 +37,8 @@ finding rather than the robust-accuracy column.
 
 The one trap in the design: **the baseline must not already be at 0%.** A 32 px patch at
 100 steps drives PatchAutoPGD to 0.00% on this model, and against a floor no scaling can
-show an improvement - the same flat-ladder reading the 29 Aug review flagged for the eps
-sweep. A 16 px patch at token 90 leaves about 9% robust, which is headroom in both
-directions, and it is the setting `validate_patch_fool.py` already uses.
+show an improvement. A 16 px patch at token 90 leaves about 9% robust, which is headroom
+in both directions, and it is the setting `validate_patch_fool.py` already uses.
 
 The seed is reset before every attack, so a given batch starts every variant from the
 same random patch. `unscaled` and `lambda = 1.0` are the same computation by

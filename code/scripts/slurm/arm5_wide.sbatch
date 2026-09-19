@@ -1,9 +1,7 @@
 #!/bin/bash
-# Arm 5 with eight evasion weights against the finder's five, inverting the budget
-# asymmetry of job 859868: the finder was attacked with fifteen runs per location and
-# arm 5 with four, so the gate's verdict was measured under a lopsided search. If the
-# finder still leads once arm 5 has the larger weight sweep, the margin is not an
-# artefact of having attacked the finder harder.
+# Arm 5 with eight evasion weights against the finder's five, giving arm 5 the larger
+# weight sweep so a prior lopsided comparison (fewer arm-5 runs per location than the
+# finder's) cannot explain the finder's lead.
 # sbatch --exclude=xgpd0,xgpd5,xgpe1,xgpe2,xgpe6 code/scripts/slurm/arm5_wide.sbatch
 
 #SBATCH --job-name=fyp-arm5wide

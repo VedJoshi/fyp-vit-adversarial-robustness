@@ -12,8 +12,8 @@
 #   theirs (vitsmall)  theirs (seed 0)    blocked: their weights are not downloadable
 #
 # Their published weights are not obtainable -- the link in their README points at an
-# empty folder as of 8 September 2026 -- so the model half cannot be run until the authors
-# send the checkpoint. The class half can, and it is worth running on its own: if robust
+# empty folder -- so the model half cannot be run until the authors send the checkpoint.
+# The class half can, and it is worth running on its own: if robust
 # accuracy is still 0.00% at 20px on their exact class subset, the class draw is
 # eliminated and step 6h reduces to the checkpoint alone.
 #

@@ -13,8 +13,8 @@
 # WHAT `--no-defense` DOES. It forces `RSAConfig.window = 0` and nothing else. The patch
 # size still drives the attack and the location grid, and RSAAttention stays installed on
 # all twelve blocks, so `disable_fused_attention` and the whole forward path are the ones
-# the defended sweeps ran through. Verified 8 September: with window 0 the model's logits
-# are bit-identical to the raw classifier's, while window 2 moves them by 1.14.
+# the defended sweeps ran through. Verified: with window 0 the model's logits are
+# bit-identical to the raw classifier's, while window 2 moves them by 1.14.
 #
 # THE DEFENSE SETTINGS BELOW ARE INERT AND PINNED ANYWAY. With window 0 nothing reads
 # them. They are passed so the result file states which sweep this is the baseline for,

@@ -74,3 +74,15 @@ env/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Cluster job scripts: only those that produced a cited number or a control are
+# published. Smoke tests, superseded pilots and subsumed diagnostics stay local.
+code/scripts/slurm/smoke_min.sbatch
+code/scripts/slurm/smoke_test.sbatch
+code/scripts/slurm/pilot_reference_fidelity.sbatch
+code/scripts/slurm/pilot_window_rule.sbatch
+code/scripts/slurm/selection_pilot.sbatch
+code/scripts/slurm/checkpoint_control.sbatch
+code/scripts/slurm/gate_a_rule.sbatch
+code/scripts/slurm/gate_a_geometry.sbatch
+code/scripts/slurm/gate_a_pooling.sbatch

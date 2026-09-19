@@ -4,8 +4,9 @@
 
 The reference block in `reference_trim` is transcribed line for line from
 `pycls/models/vision_transformer.py:81-107` of wagner-group/robust-self-attention,
-which Norman Mu pointed to on 7 September 2026. Nothing here reads the paper: it
-compares this harness's arithmetic against the code the authors ran.
+identified by RSA author Norman Mu as the released implementation. Nothing here
+reads the paper: it compares this harness's arithmetic against the code the
+authors ran.
 
 What it pins, at all five of RSA's patch sizes:
 

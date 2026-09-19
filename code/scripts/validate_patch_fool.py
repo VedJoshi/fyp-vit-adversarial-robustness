@@ -18,10 +18,9 @@ location should then be stronger again; if it is not, patch selection is wrong.
 The second is on the objective rather than the outcome: **the attack must raise the
 attention paid to the token it attacks**, measured at the layers it optimises. Success
 at flipping the label does not imply it, because cross-entropy can carry the attack on
-its own while the attention term pushes the other way. That is what a sign error in
-`patch_fool`'s second objective looks like from outside, and until 8 September 2026 it
-was what this implementation did; measurements 2 and 3 are about attention, so an
-attack that only happens to misclassify cannot support them.
+its own while the attention term pushes the other way - a sign error in `patch_fool`'s
+second objective looks exactly like this from outside. Measurements 2 and 3 are about
+attention, so an attack that only happens to misclassify cannot support them.
 
 Robust accuracy is conditioned on the clean prediction throughout - an image the model
 already misclassifies is never robust, since the patch may hold the original pixels.
@@ -189,17 +188,11 @@ def main():
           f"({'ok' if outside == 0.0 else 'LEAK'})")
     print(f"  {sel['distinct_tokens']} distinct tokens selected across {x.shape[0]} images")
 
-    # Direction of the attention objective. Patch-Fool's second term exists to drag
-    # attention *onto* the patch, so the attacked image must place more attention on
-    # the attacked token than the clean image does. Classification success does not
-    # test this: cross-entropy alone can flip the label while the attention term pushes
-    # the other way, which is exactly what a sign error in the objective looks like.
-    # Measured on the **fixed-token** run, and that choice is the test. `fool_selected`
-    # attacks the token that already receives the most attention at `select_layer`, so
-    # its target starts at a local maximum and has little room to rise; a correct
-    # objective can look weak there for a reason that has nothing to do with its sign.
-    # Token 90 is chosen without reference to attention, so a rise there is the
-    # objective working. The selected-token run is reported alongside, not asserted on.
+    # Asserted on the fixed-token run, not fool_selected: fool_selected attacks the
+    # token already receiving the most attention at `select_layer`, so its target
+    # starts at a local maximum with little room to rise, and a correct objective can
+    # look weak there for a reason unrelated to its sign. Token 90 is chosen without
+    # reference to attention, so a rise there is the objective working.
     direction = {}
     for name, img, tok in (("fixed", adv_fixed, fixed), ("selected", adv, tokens)):
         a_clean = target_attention(clf, x, tok)

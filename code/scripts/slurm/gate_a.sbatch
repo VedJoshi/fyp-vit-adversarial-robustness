@@ -79,8 +79,8 @@ fi
 # config.SCALE.attack_steps = 100, which is exactly RSA's protocol. No --renorm:
 # the default is "zero", the mode measured to match RSA's Table 2.
 # The defense settings are pinned to what this sweep originally ran under, not left to
-# the defaults, which changed on 7 September when the authors' code became available.
-# See the note in gate_a_rule.sbatch.
+# the defaults, so a resubmission cannot silently pick up a later default change. See
+# the note in gate_a_rule.sbatch.
 srun python code/scripts/gate_a.py --sizes "$SIZE" \
     --window-rule "ceil+1" --renorm zero --score-frame per-head \
     --tag "full_${SIZE}px"

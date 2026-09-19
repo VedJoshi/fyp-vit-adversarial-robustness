@@ -51,8 +51,8 @@ def max_cell_overlap(offset_px: int, size_px: int) -> int:
 def read_progress(path: Path) -> tuple[dict[tuple[int, int], list[int]], set[int] | None]:
     """`({(top, left): attacked-wrong indices}, clean-wrong indices or None)`.
 
-    `clean_wrong` is None for files written before 8 September 2026, which logged only
-    post-attack errors. See `CLEAN_WRONG_NOTE`.
+    `clean_wrong` is None for progress files that predate the protocol header and
+    logged only post-attack errors. See `CLEAN_WRONG_NOTE`.
     """
     locs: dict[tuple[int, int], list[int]] = {}
     clean: set[int] | None = None

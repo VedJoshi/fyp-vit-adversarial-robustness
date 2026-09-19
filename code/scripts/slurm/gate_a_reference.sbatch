@@ -8,7 +8,7 @@
 # settings that the 2x2 has not first validated.
 #
 # WHAT IT IS. gate_a.sbatch with the defense pinned to what wagner-group/robust-self-attention
-# actually does, established 7 September from `pycls/models/vision_transformer.py:81-107`:
+# actually does, from `pycls/models/vision_transformer.py:81-107`:
 #
 #   --window-rule ceil+1      their line 84, `p // 16 + 1 (+1 if p % 16 > 1)`, and line 94
 #                             pools unpadded so only whole-grid windows are candidates
