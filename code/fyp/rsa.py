@@ -25,6 +25,9 @@ DEFAULT_RENORMALISATION = "uniform"
 SCORE_FRAMES = metrics.SCORE_FRAMES
 DEFAULT_SCORE_FRAME = metrics.DEFAULT_SCORE_FRAME
 
+SELECT_RULES = metrics.SELECT_RULES
+DEFAULT_SELECT_RULE = metrics.DEFAULT_SELECT_RULE
+
 # ceil+1/released/ceil: mean-scored windows, differing in side formula.
 # padded: clipped edge windows; multi: mean-ranked variable shapes.
 # token: best mean window containing the peak; max: max-scored windows.
@@ -55,6 +58,8 @@ class RSAConfig:
     renormalise: str = DEFAULT_RENORMALISATION
     window_rule: str = DEFAULT_WINDOW_RULE
     score_frame: str = DEFAULT_SCORE_FRAME
+    # What the anchor is ranked by; score_frame applies to the anomaly rule only.
+    select_rule: str = DEFAULT_SELECT_RULE
     backward: str = DEFAULT_BACKWARD
     # Blocks after k reuse block k's mask; None reselects at every block.
     freeze_mask_after: int | None = None
@@ -75,6 +80,10 @@ class RSAConfig:
         if self.score_frame not in SCORE_FRAMES:
             raise ValueError(
                 f"unknown score_frame {self.score_frame!r}; pick from {SCORE_FRAMES}"
+            )
+        if self.select_rule not in SELECT_RULES:
+            raise ValueError(
+                f"unknown select_rule {self.select_rule!r}; pick from {SELECT_RULES}"
             )
         if self.backward not in BACKWARDS:
             raise ValueError(
@@ -114,6 +123,7 @@ class RSAConfig:
                   renormalise: str = DEFAULT_RENORMALISATION,
                   window_rule: str = DEFAULT_WINDOW_RULE,
                   score_frame: str = DEFAULT_SCORE_FRAME,
+                  select_rule: str = DEFAULT_SELECT_RULE,
                   backward: str = DEFAULT_BACKWARD,
                   freeze_mask_after: int | None = None) -> "RSAConfig":
         """Size the mask for patch_px; centred masks use the stride-20 grid guarantee."""
@@ -124,7 +134,8 @@ class RSAConfig:
         else:
             window = metrics.rsa_window_size(patch_px, rule=window_rule)
         return cls(patch_px=patch_px, window=window, renormalise=renormalise,
-                   window_rule=window_rule, score_frame=score_frame, backward=backward,
+                   window_rule=window_rule, score_frame=score_frame,
+                   select_rule=select_rule, backward=backward,
                    freeze_mask_after=freeze_mask_after)
 
     @classmethod
@@ -163,6 +174,7 @@ class RSAConfig:
             "renormalise": self.renormalise,
             "window_rule": self.window_rule,
             "score_frame": self.score_frame,
+            "select_rule": self.select_rule,
             "backward": self.backward,
             "freeze_mask_after": self.freeze_mask_after,
             "n_windows": self.n_windows,
@@ -266,7 +278,8 @@ class RSAAttention(nn.Module):
             return mask
 
         w, g, rule = self.cfg.window, config.GRID, self.cfg.window_rule
-        scores = metrics.rsa_token_scores(v, frame=self.cfg.score_frame)  # (B, N_img)
+        scores = metrics.select_scores(v, frame=self.cfg.score_frame,
+                                       rule=self.cfg.select_rule)          # (B, N_img)
 
         if rule == "topk":
             k = min(w * w, scores.shape[1])
@@ -396,7 +409,8 @@ class RSAAttention(nn.Module):
 
     def extra_repr(self) -> str:
         return (f"window={self.cfg.window}, renormalise={self.cfg.renormalise!r}, "
-                f"score_frame={self.cfg.score_frame!r}, backward={self.cfg.backward!r}")
+                f"score_frame={self.cfg.score_frame!r}, "
+                f"select_rule={self.cfg.select_rule!r}, backward={self.cfg.backward!r}")
 
 
 def _candidate_windows(rule: str, window: int,

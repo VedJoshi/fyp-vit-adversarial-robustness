@@ -37,35 +37,8 @@ G = config.GRID
 GATE_W0 = 90.0    # classification-only coverage must not fall below this
 GATE_W05 = 35.0   # selection-aware coverage must reach this
 
-
-def head_mean_distances(v: torch.Tensor) -> torch.Tensor:
-    """(n, 196, 196) mean over heads of the per-head token distance matrix.
-
-    v is (n, H, 197, D) with CLS at index 0, which is dropped: CLS is not a
-    candidate anchor and is not part of the image's own token population.
-    """
-    x = v[:, :, 1:, :].float()
-    n, h = x.shape[0], x.shape[1]
-    out = x.new_zeros(n, G * G, G * G)
-    for j in range(h):
-        out += torch.cdist(x[:, j], x[:, j])
-    return out / h
-
-
-def exclusion_mask(radius: int) -> torch.Tensor:
-    """(196, 196) True where j is too close to i to count as a neighbour.
-
-    radius 0 excludes only self; radius 1 also excludes the surrounding 3x3.
-    """
-    idx = torch.arange(G * G)
-    r, c = idx // G, idx % G
-    return (r[:, None] - r[None, :]).abs().le(radius) & (c[:, None] - c[None, :]).abs().le(radius)
-
-
-def kth_distance(dist: torch.Tensor, k: int, radius: int) -> torch.Tensor:
-    """(n, 196) distance to the k-th nearest admissible token."""
-    d = dist.masked_fill(exclusion_mask(radius).to(dist.device), float("inf"))
-    return d.topk(k, dim=-1, largest=False).values[..., k - 1]
+# The distance helpers live in fyp.metrics so the live defence and this screen
+# cannot drift apart.
 
 
 def rules(ks: list[int], far_ks: list[int]) -> dict:
@@ -75,9 +48,9 @@ def rules(ks: list[int], far_ks: list[int]) -> dict:
         "monotone_null": lambda s, d: 3.0 * s + 7.0,
     }
     for k in ks:
-        out[f"knn{k}"] = lambda s, d, k=k: kth_distance(d, k, 0)
+        out[f"knn{k}"] = lambda s, d, k=k: metrics.kth_distance(d, k, 0)
     for k in far_ks:
-        out[f"knnfar{k}"] = lambda s, d, k=k: kth_distance(d, k, 1)
+        out[f"knnfar{k}"] = lambda s, d, k=k: metrics.kth_distance(d, k, 1)
     return out
 
 
@@ -113,12 +86,12 @@ def main():
               for loc in locs}
 
     # Distances are the expensive part; compute each set once and reuse per rule.
-    dist = {"clean": head_mean_distances(val["clean_v"].to(device))}
+    dist = {"clean": metrics.head_mean_distances(val["clean_v"].to(device))}
     score = {"clean": cap["clean_scores"].to(device)}
     for loc in locs:
         for w in weights:
             key = (loc, w)
-            dist[key] = head_mean_distances(val["by"][loc][str(w)].to(device))
+            dist[key] = metrics.head_mean_distances(val["by"][loc][str(w)].to(device))
             score[key] = cap["by"][loc][str(float(w))]["scores_own"].to(device)
     base_clean = score["clean"].argmax(1)
 

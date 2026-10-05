@@ -193,6 +193,59 @@ def score_frame_mean(
     return mu
 
 
+# Anchor ranking: RSA's value anomaly, or the distance to the nearest admissible
+# neighbour with the token's surrounding 3x3 block excluded.
+SELECT_RULES = ("anomaly", "knnfar1")
+DEFAULT_SELECT_RULE = "anomaly"
+
+
+def head_mean_distances(v: torch.Tensor) -> torch.Tensor:
+    """(B, 196, 196) mean over heads of the per-head token distance matrix.
+
+    v is (B, H, 197, D) with CLS at index 0, which is dropped: CLS is not a
+    candidate anchor and is not part of the image's own token population.
+    """
+    x = v[:, :, 1:, :].float()
+    n, h = x.shape[0], x.shape[1]
+    out = x.new_zeros(n, config.N_IMAGE_TOKENS, config.N_IMAGE_TOKENS)
+    for j in range(h):
+        out = out + torch.cdist(x[:, j], x[:, j])
+    return out / h
+
+
+def exclusion_mask(radius: int, grid: int = config.GRID) -> torch.Tensor:
+    """(196, 196) True where j is too close to i to count as a neighbour.
+
+    radius 0 excludes only self; radius 1 also excludes the surrounding 3x3.
+    """
+    idx = torch.arange(grid * grid)
+    r, c = idx // grid, idx % grid
+    return ((r[:, None] - r[None, :]).abs().le(radius)
+            & (c[:, None] - c[None, :]).abs().le(radius))
+
+
+def kth_distance(dist: torch.Tensor, k: int, radius: int) -> torch.Tensor:
+    """(B, 196) distance to the k-th nearest admissible token."""
+    d = dist.masked_fill(exclusion_mask(radius).to(dist.device), float("inf"))
+    return d.topk(k, dim=-1, largest=False).values[..., k - 1]
+
+
+def select_scores(
+    v: torch.Tensor,
+    frame: str = DEFAULT_SCORE_FRAME,
+    rule: str = DEFAULT_SELECT_RULE,
+) -> torch.Tensor:
+    """Anchor ranking, (B, N_img). The defence and its evasion objective share this.
+
+    High is anomalous under either rule, so the argmax is the anchor in both.
+    """
+    if rule == "anomaly":
+        return rsa_token_scores(v, frame=frame)
+    if rule == "knnfar1":
+        return kth_distance(head_mean_distances(v), 1, 1)
+    raise ValueError(f"unknown select rule {rule!r}; pick from {SELECT_RULES}")
+
+
 def rsa_window_scores(
     token_scores: torch.Tensor,
     window: int,

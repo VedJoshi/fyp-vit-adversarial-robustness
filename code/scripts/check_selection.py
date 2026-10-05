@@ -399,4 +399,87 @@ for f18 in (lambda v: 3 * v + 7, torch.expm1, lambda v: v ** 3):
 print("18. rescoring helpers     OK  neighbourhood mean is edge-correct, monotone "
       "transforms leave the argmax fixed")
 
+# 19. The live knnfar1 score is the screen's score rather than a copy of it.
+import neighbour_screen  # noqa: E402
+
+torch.manual_seed(6)
+v19 = torch.randn(5, 6, config.N_TOKENS, 8)
+anom19 = metrics.rsa_token_scores(v19, frame="global")
+screen19 = neighbour_screen.rules([4], [1])["knnfar1"](anom19,
+                                                       metrics.head_mean_distances(v19))
+live19 = metrics.select_scores(v19, rule="knnfar1")
+assert torch.equal(screen19, live19), "the defence and the screen compute different scores"
+assert not torch.equal(live19.argmax(1), anom19.argmax(1)), \
+    "knnfar1 must be able to pick a different anchor from the anomaly score"
+excl19 = metrics.exclusion_mask(1)
+assert excl19.diagonal().all() and int(excl19[7 * G + 7].sum()) == 9 \
+    and int(excl19[0].sum()) == 4, "the 3x3 exclusion must hold self and clamp at borders"
+print("19. knnfar1 score shared   OK  identical to neighbour_screen's rule, ranks "
+      "differently from the anomaly score, 3x3 self-exclusion")
+
+# 20. An increasing transform of the knnfar1 score leaves the anchor alone.
+for f20 in (lambda t: 3 * t + 7, torch.expm1, lambda t: t ** 3):
+    assert torch.equal(f20(live19).argmax(1), live19.argmax(1)), \
+        "a monotone transform changed the knnfar1 anchor"
+print("20. knnfar1 monotone null  OK  three increasing transforms leave the anchor fixed")
+
+# 21. The defence masks the centred block on the knnfar1 argmax.
+cfg21 = rsa.RSAConfig(patch_px=20, window=3, window_rule="centred",
+                      freeze_mask_after=0, select_rule="knnfar1")
+mod21 = rsa.RSAAttention.__new__(rsa.RSAAttention)
+mod21.cfg, mod21.layer_idx, mod21.shared, mod21.oracle_mask = cfg21, 0, {}, None
+got21 = mod21.select(v19)
+assert torch.equal(got21, rsa.centred_token_mask(live19.argmax(1), cfg21.window)), \
+    "the applied mask is not the centred block on the knnfar1 argmax"
+assert not got21[:, 0].any() and (got21[:, 1:].sum(1) == 9).all()
+try:
+    rsa.RSAConfig(patch_px=20, window=3, select_rule="knnfar2")
+except ValueError as e21:
+    assert "select_rule" in str(e21), e21
+else:
+    raise AssertionError("an unknown select_rule should be rejected")
+print("21. knnfar1 anchor         OK  the applied mask is the centred block on the "
+      "argmax, CLS free, 9 tokens; unknown rules rejected")
+
+# 22. The evasion objective carries gradient into the patch under knnfar1.
+cfg22 = rsa.RSAConfig.for_patch(20, window_rule="centred", freeze_mask_after=0,
+                                select_rule="knnfar1")
+stub22 = _StubViT().eval()
+x22 = torch.rand(2, 3, config.IMAGE_SIZE, config.IMAGE_SIZE, requires_grad=True)
+val22 = evasion_loss(stub22, cfg22, 100, 20, 20, x22.device)(x22)
+assert val22.shape == (2,) and torch.isfinite(val22).all(), val22
+(g22,) = torch.autograd.grad(val22.sum(), x22)
+assert torch.isfinite(g22).all(), "knnfar1 produced a non-finite input gradient"
+support22 = attacks.patch_mask(x22.shape, 100, 20, 20, x22.device).bool().expand_as(x22)
+assert float(g22[support22].abs().sum()) > 0, "no gradient reaches the attacker's pixels"
+# The objective is only aimed at this defence if it reads the score the defence selected on.
+# Anchors alone are not enough: argmax is scale-invariant, so a rescaled attack score picks the
+# same mask while silently changing the effective auxiliary weight. Compare the tensors.
+seen22: list[torch.Tensor] = []
+_orig22 = metrics.select_scores
+
+
+def _spy22(*a, **k):
+    s = _orig22(*a, **k)
+    seen22.append(s)
+    return s
+
+
+metrics.select_scores = _spy22
+try:
+    with rsa.enable(stub22, cfg22) as h22:
+        with torch.no_grad():
+            stub22(x22.detach())
+        applied22 = h22.masks()[0]
+finally:
+    metrics.select_scores = _orig22
+assert seen22, "the defence computed no score, so nothing was compared"
+with torch.no_grad():
+    read22 = selection_scores(stub22, x22.detach(), cfg22)
+assert torch.equal(applied22, rsa.centred_token_mask(read22.argmax(1), cfg22.window)),     "the attack's score does not select the mask the defence installed"
+assert torch.equal(seen22[0], read22),     "the attack differentiates a different score tensor from the one the defence selected on"
+print(f"22. knnfar1 gradient       OK  finite objective, "
+      f"{float(g22[support22].abs().sum()):.3e} of gradient mass on the patch pixels, "
+      f"and the attack's score tensor equals the defence's block-0 score")
+
 print("\nall selection checks passed")

@@ -1,0 +1,142 @@
+{
+  "_meta": {
+    "written_utc": "2026-09-21T03:56:10+00:00",
+    "git_commit": "4b89252",
+    "git_dirty": true,
+    "scale": "full",
+    "dataset": "imagenet100",
+    "model": "deit_small_patch16_224",
+    "n_eval_images": 128,
+    "attack_steps": 200,
+    "scale_n_eval_images": 512,
+    "scale_attack_steps": 100,
+    "seed": 0,
+    "torch": "2.7.0+cu118",
+    "timm": "1.0.15",
+    "device": "cpu",
+    "is_result": true,
+    "full_sample": false
+  },
+  "purpose": "within-defence survival curves for knnfar1 and its matched arm 5 comparator",
+  "protocol": "02_direction/PROTOCOL_2026-09-20_knnfar.md",
+  "job": "866737",
+  "caveat": "128 development images, two locations. Not the 512-image, 121-location protocol.",
+  "gate": {
+    "primary_bar": 55.0,
+    "clean_allowance": 2.0,
+    "stability": 3
+  },
+  "curves": {
+    "knnfar1": [
+      {
+        "stage": 1,
+        "runs": [
+          "selection_attack_knnfar1_uniform_s1",
+          "selection_attack_knnfar1_smooth_s1"
+        ],
+        "survives_w0": 115,
+        "survives_w0_pct": 89.84375,
+        "survives": 44,
+        "survives_pct": 34.375,
+        "newly_broken": null,
+        "clean_accuracy": 92.96875,
+        "n_images": 128
+      },
+      {
+        "stage": 2,
+        "runs": [
+          "selection_attack_knnfar1_uniform_s1",
+          "selection_attack_knnfar1_uniform_s2",
+          "selection_attack_knnfar1_smooth_s1",
+          "selection_attack_knnfar1_smooth_s2"
+        ],
+        "survives_w0": 115,
+        "survives_w0_pct": 89.84375,
+        "survives": 41,
+        "survives_pct": 32.03125,
+        "newly_broken": 3,
+        "clean_accuracy": 92.96875,
+        "n_images": 128
+      },
+      {
+        "stage": 3,
+        "runs": [
+          "selection_attack_knnfar1_uniform_s1",
+          "selection_attack_knnfar1_uniform_s2",
+          "selection_attack_knnfar1_uniform_s3",
+          "selection_attack_knnfar1_smooth_s1",
+          "selection_attack_knnfar1_smooth_s2",
+          "selection_attack_knnfar1_smooth_s3"
+        ],
+        "survives_w0": 115,
+        "survives_w0_pct": 89.84375,
+        "survives": 26,
+        "survives_pct": 20.3125,
+        "newly_broken": 15,
+        "clean_accuracy": 92.96875,
+        "n_images": 128
+      }
+    ],
+    "arm 5": [
+      {
+        "stage": 1,
+        "runs": [
+          "selection_attack_arm5_uniform_s1_knncmp",
+          "selection_attack_arm5_smooth_s1_knncmp"
+        ],
+        "survives_w0": 114,
+        "survives_w0_pct": 89.0625,
+        "survives": 61,
+        "survives_pct": 47.65625,
+        "newly_broken": null,
+        "clean_accuracy": 92.96875,
+        "n_images": 128
+      },
+      {
+        "stage": 2,
+        "runs": [
+          "selection_attack_arm5_uniform_s1_knncmp",
+          "selection_attack_arm5_uniform_s2_knncmp",
+          "selection_attack_arm5_smooth_s1_knncmp",
+          "selection_attack_arm5_smooth_s2_knncmp"
+        ],
+        "survives_w0": 114,
+        "survives_w0_pct": 89.0625,
+        "survives": 51,
+        "survives_pct": 39.84375,
+        "newly_broken": 10,
+        "clean_accuracy": 92.96875,
+        "n_images": 128
+      },
+      {
+        "stage": 3,
+        "runs": [
+          "selection_attack_arm5_uniform_s1_knncmp",
+          "selection_attack_arm5_uniform_s2_knncmp",
+          "selection_attack_arm5_uniform_s3_knncmp",
+          "selection_attack_arm5_smooth_s1_knncmp",
+          "selection_attack_arm5_smooth_s2_knncmp",
+          "selection_attack_arm5_smooth_s3_knncmp"
+        ],
+        "survives_w0": 114,
+        "survives_w0_pct": 89.0625,
+        "survives": 33,
+        "survives_pct": 25.78125,
+        "newly_broken": 18,
+        "clean_accuracy": 92.96875,
+        "n_images": 128
+      }
+    ]
+  },
+  "newly_broken_after_stage_1": {
+    "knnfar1": 18,
+    "arm 5": 28
+  },
+  "thresholds_met": {
+    "primary_bar": false,
+    "clean_allowance": true,
+    "stability": false
+  },
+  "outcome": "unsettled within the evaluation budget",
+  "note": "Stability failing overrides the other two rows, per the frozen decision table. The margin against arm 5 is deliberately not the primary readout."
+}

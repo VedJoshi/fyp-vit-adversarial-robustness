@@ -26,10 +26,15 @@ from gate_a import paired_seed  # noqa: E402
 
 
 def selection_scores(clf, x: torch.Tensor, cfg) -> torch.Tensor:
-    """Block-0 value-anomaly scores before replacement, with gradients; shape (B, N_img)."""
+    """The defence's own block-0 anchor scores before replacement, with gradients.
+
+    Shape (B, N_img). Routed through the same function `RSAAttention.select` calls,
+    so the objective below is aimed at whatever rule the defence ranks anchors by.
+    """
     with hooks.AttentionCapture(clf, layers=[0], store=("v",), detach=False) as cap:
         clf(x)
-    return metrics.rsa_token_scores(cap.data[0].v, frame=cfg.score_frame)
+    return metrics.select_scores(cap.data[0].v, frame=cfg.score_frame,
+                                 rule=cfg.select_rule)
 
 
 def evasion_loss(clf, cfg, top: int, left: int, size: int, device):
@@ -189,6 +194,10 @@ def main():
     ap.add_argument("--window-rule", default="centred")
     ap.add_argument("--freeze-mask-after", type=int, default=0)
     ap.add_argument("--score-frame", default="global")
+    ap.add_argument("--select-rule", default=rsa.DEFAULT_SELECT_RULE,
+                    choices=list(rsa.SELECT_RULES),
+                    help="what the defence ranks anchors by; the evasion objective "
+                         "follows it")
     ap.add_argument("--renorm", default="uniform")
     ap.add_argument("--backward", default="intended")
     ap.add_argument("--out", default="selection_attack_dev")
@@ -210,7 +219,9 @@ def main():
     clf, _ = models.load_model(class_indices=class_indices, device=device)
     cfg = rsa.RSAConfig.for_patch(args.size, renormalise=args.renorm,
                                   window_rule=args.window_rule,
-                                  score_frame=args.score_frame, backward=args.backward,
+                                  score_frame=args.score_frame,
+                                  select_rule=args.select_rule,
+                                  backward=args.backward,
                                   freeze_mask_after=args.freeze_mask_after)
 
     sub = data.dev_subset(ds, args.n_images)
@@ -226,7 +237,8 @@ def main():
     print(f"\nselection-aware attack on development images, disjoint from the "
           f"{config.SCALE.n_eval_images}-image protocol sample")
     print(f"{n} images, {len(locations)} locations, {args.steps} steps, "
-          f"window {cfg.window} ({cfg.window_rule}), freeze {cfg.freeze_mask_after}")
+          f"window {cfg.window} ({cfg.window_rule}), freeze {cfg.freeze_mask_after}, "
+          f"anchors ranked by {cfg.select_rule}")
     print(f"aux weights {weights}\n")
 
     t_start = time.time()
@@ -305,12 +317,14 @@ def main():
           "once per location it fails at. These are development images: report nothing "
           "from this table as a result.")
     results.save(args.out, dict(
-        purpose="selection-aware attack against arm 5, development images",
+        purpose="selection-aware attack against a centred, frozen-at-0 defence, "
+                "development images",
         settings=dict(size=args.size, steps=args.steps, weights=weights,
                       n_images=n, smooth_init=args.smooth_init,
                       seed_offset=args.seed_offset, draw=data.draw_provenance(ds),
                       locations=[list(l) for l in locations],
                       window=cfg.window, window_rule=cfg.window_rule,
+                      select_rule=cfg.select_rule,
                       freeze_mask_after=cfg.freeze_mask_after,
                       dev_disjoint_from=config.SCALE.n_eval_images),
         index=idx,
