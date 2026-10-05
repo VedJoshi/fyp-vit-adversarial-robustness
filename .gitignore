@@ -34,13 +34,16 @@ code/data/*
 code/results/*
 !code/results/*.json
 
-# Gate A generated many pilots and superseded sweeps. Publish only the four settled records.
+# Gate A generated many pilots and superseded sweeps. Publish only the settled records.
 # Last match wins, so the exact negations must remain below the broad gate_a pattern.
 code/results/gate_a_*.json
 !code/results/gate_a_reference.json
 !code/results/gate_a_undefended.json
 !code/results/gate_a_bwdrel.json
 !code/results/gate_a_released.json
+# The two sides of the black-box comparison.
+!code/results/gate_a_transfer_suite_arm5_blackbox.json
+!code/results/gate_a_transfer_suite_ref.json
 code/results/table2_by_rule.json
 code/results/pilot20full_analysis.json
 code/results/pilot20fullb_analysis.json

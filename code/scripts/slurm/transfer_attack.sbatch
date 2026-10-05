@@ -4,6 +4,7 @@
 # Task 4 attacks the target directly at the weight frozen on development data.
 # Use transfer_attack.py --combine to union finished runs without another sweep.
 # sbatch --array=0-2 --exclude=xgpe2,xgpe6 code/scripts/slurm/transfer_attack.sbatch
+# Target another arm with FYP_TARGET_TAG, FYP_WINDOW_RULE and FYP_FREEZE_MASK_AFTER.
 
 #SBATCH --job-name=fyp-transfer
 #SBATCH --time=1-00:00:00
@@ -33,6 +34,8 @@ test -d "$FYP_IMAGENET100/val" || {
     echo "ERROR: missing $FYP_IMAGENET100/val"; exit 1; }
 
 TARGET="${FYP_TARGET_TAG:-gate_a_diag_centred_frz0}"
+RULE="${FYP_WINDOW_RULE:-centred}"
+FREEZE="${FYP_FREEZE_MASK_AFTER:-0}"
 test -f "code/results/${TARGET}.progress.jsonl" || {
     echo "ERROR: missing code/results/${TARGET}.progress.jsonl, the target's own sweep";
     exit 1; }
@@ -43,15 +46,17 @@ case "$SLURM_ARRAY_TASK_ID" in
     2) SOURCE=centred ;;
     3) SOURCE=self ;;
     4) SOURCE=selection ;;
+    5) SOURCE=centred_frz0 ;;
     *) echo "ERROR: unexpected array index $SLURM_ARRAY_TASK_ID"; exit 1 ;;
 esac
 
-echo "transfer task $SLURM_ARRAY_TASK_ID: source=$SOURCE target=$TARGET"
+echo "transfer task $SLURM_ARRAY_TASK_ID: source=$SOURCE target=$TARGET rule=$RULE freeze=$FREEZE"
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
 srun python code/scripts/check_transfer.py
 srun python code/scripts/check_selection.py
 srun python code/scripts/transfer_attack.py \
     --source "$SOURCE" \
+    --tag "transfer_${SOURCE}${FYP_TAG_SUFFIX:-}" \
     --target-tag "$TARGET" \
     --size 20 \
     --n-images 512 \
@@ -61,8 +66,8 @@ srun python code/scripts/transfer_attack.py \
     --loss dlr \
     --init uniform \
     --schedule counter \
-    --window-rule centred \
-    --freeze-mask-after 0 \
+    --window-rule "$RULE" \
+    --freeze-mask-after "$FREEZE" \
     --score-frame global \
     --renorm uniform \
     --backward intended \

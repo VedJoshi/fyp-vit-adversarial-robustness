@@ -28,12 +28,18 @@ SOURCES = {
     "undefended": dict(window=0),
     "mean": dict(window_rule="ceil+1", freeze_mask_after=None),
     "centred": dict(window_rule="centred", freeze_mask_after=None),
+    "centred_frz0": dict(window_rule="centred", freeze_mask_after=0),
     "self": {},
     # Direct attack on the target using the selection auxiliary loss.
     "selection": {},
 }
 
 AUX_SOURCES = ("selection",)
+
+
+def opt_int(text: str) -> int | None:
+    """`none` for the unfrozen default, which argparse cannot express as an int."""
+    return None if text.lower() == "none" else int(text)
 
 
 def parse_args():
@@ -57,7 +63,8 @@ def parse_args():
     p.add_argument("--init", default="uniform")
     p.add_argument("--schedule", default="counter")
     p.add_argument("--window-rule", default="centred", choices=rsa.WINDOW_RULES)
-    p.add_argument("--freeze-mask-after", type=int, default=0, metavar="K")
+    p.add_argument("--freeze-mask-after", type=opt_int, default=0, metavar="K",
+                   help="block after which every block reuses its mask; 'none' to never freeze")
     p.add_argument("--score-frame", default="global", choices=rsa.SCORE_FRAMES)
     p.add_argument("--renorm", default="uniform", choices=rsa.RENORMALISATIONS)
     p.add_argument("--backward", default="intended", choices=rsa.BACKWARDS)
@@ -85,10 +92,22 @@ def read_target(tag: str, results_root: Path):
             continue
         r = json.loads(line)
         if r.get("record") == "protocol":
+            fp = dict(r["fingerprint"], size=r.get("size"))
+            if fingerprint is not None and (fp != fingerprint
+                                            or set(r["clean_wrong"]) != clean_wrong):
+                raise SystemExit(f"{path.name} holds two experiments: a later protocol header "
+                                 f"differs from the first, so its locations cannot be "
+                                 f"attributed. Split or remove the file.")
             clean_wrong = set(r["clean_wrong"])
-            fingerprint = r["fingerprint"]
+            fingerprint = fp
         else:
-            per_loc[(r["top"], r["left"])] = set(r["wrong"]) | set(r.get("clean_wrong", ()))
+            if fingerprint is None or r.get("size", fingerprint["size"]) != fingerprint["size"]:
+                raise SystemExit(f"{path.name} has a location without a matching size protocol")
+            location = (r["top"], r["left"])
+            wrong = set(r["wrong"]) | set(r.get("clean_wrong", ()))
+            if location in per_loc and per_loc[location] != wrong:
+                raise SystemExit(f"{path.name} has conflicting failures at {location}")
+            per_loc[location] = wrong
     if fingerprint is None:
         raise SystemExit(f"{path.name} has no protocol header, so its sample and defense "
                          f"are unrecoverable and a union with it would be meaningless")
@@ -97,7 +116,7 @@ def read_target(tag: str, results_root: Path):
 
 def check_comparable(mine: dict, theirs: dict) -> None:
     """Require the same image population; target defense and locations are checked separately."""
-    must_match = ("n_images", "sample_seed", "wnids_sha1", "class_draw")
+    must_match = ("n_images", "sample_seed", "wnids_sha1", "class_draw", "size")
     differs = {k: (mine.get(k), theirs.get(k)) for k in must_match
                if mine.get(k) != theirs.get(k)}
     if differs:
@@ -212,6 +231,14 @@ def main():
                                          backward=args.backward)
     target_cfg = replace(target_cfg, freeze_mask_after=args.freeze_mask_after)
     source_cfg = replace(target_cfg, **SOURCES[args.source])
+    if source_cfg.window and source_cfg.window_rule != target_cfg.window_rule:
+        # The window side depends on the rule, so a surrogate takes its own rule's side.
+        source_cfg = replace(source_cfg, window=rsa.RSAConfig.for_patch(
+            size, window_rule=source_cfg.window_rule).window)
+    transferred = args.source not in ("self",) + AUX_SOURCES
+    if transferred and source_cfg == target_cfg:
+        raise SystemExit(f"--source {args.source} reproduces the target defense exactly, so it "
+                         f"is a white-box attack rather than a transfer; use --source self.")
     if args.source in AUX_SOURCES and args.aux_weight <= 0:
         raise SystemExit(f"--source {args.source} needs a positive --aux-weight; at 0 it "
                          f"is the plain attack and `--source self` already measures that.")
@@ -220,7 +247,7 @@ def main():
     locations = [l for l in attacks.patch_locations(size)[:: args.loc_stride]]
     mine = {"n_images": n, "sample_seed": config.SEED, "class_draw": class_draw,
             "wnids_sha1": hashlib.sha1(",".join(wnids).encode()).hexdigest(),
-            "loc_stride": args.loc_stride}
+            "loc_stride": args.loc_stride, "size": size}
     check_comparable(mine, tgt_fp)
     # Reject mismatched settings before the expensive sweep.
     check_target_config(target_cfg, tgt_fp)
@@ -241,6 +268,9 @@ def main():
     print(f"target's own sweep: {args.target_tag}\n")
 
     progress_path = config.RESULTS_ROOT / f"gate_a_{tag}.progress.jsonl"
+    if progress_path.exists():
+        raise SystemExit(f"{progress_path.name} already exists; appending would mix two "
+                         f"experiments in one record. Move it aside or pass a new --tag.")
     per_loc: dict[tuple[int, int], set[int]] = {}
     t_start = time.time()
 
@@ -269,7 +299,8 @@ def main():
                            aux_weight=(args.aux_weight
                                        if args.source in AUX_SOURCES else 0.0),
                            transferred=args.source not in ("self",) + AUX_SOURCES)
-        with progress_path.open("a", encoding="utf-8") as fh:
+        # Exclusive creation also rejects concurrent jobs that chose the same tag.
+        with progress_path.open("x", encoding="utf-8") as fh:
             fh.write(json.dumps({"record": "protocol", "size": size,
                                  "clean_wrong": clean_wrong,
                                  "clean_acc_pct": 100.0 * float(clean_ok.float().mean()),
@@ -319,26 +350,29 @@ def main():
                   f"eta {dt * (len(locations) - li) / 3600:.1f} h")
 
     tgt = with_clean({l: tgt_per_loc[l] for l in locations}, tgt_clean_wrong)
-    summary = summarise(n, locations, {args.source: per_loc}, tgt, set())
+    summary = summarise(n, locations, {args.source: per_loc}, tgt, set(),
+                        transfers={args.source} if transferred else set())
     self_replay = (check_self_replay(locations, per_loc, tgt)
                    if args.source == "self" else None)
     if self_replay is not None:
         summary["self_replay_disagreements"] = self_replay
     results.save(f"gate_a_{tag}", dict(
-        purpose="Athalye sign 2 for the patch threat model: transferred patches vs this arm",
+        purpose="transfer evaluation for the patch threat model, bearing on Athalye's sign 2",
         tag=tag, settings=fingerprint,
         clean_acc_pct=100.0 * (n - len(clean_wrong)) / n,
         hours=round((time.time() - t_start) / 3600, 3),
         partial=args.loc_stride > 1 or n < config.SCALE.n_eval_images,
         **summary), n_eval_images=n, attack_steps=args.steps)
     report(args.target_tag, summary, self_replay)
+    if self_replay:
+        raise SystemExit(1)
 
 
 def combine(args) -> None:
     """Union saved failure sets over shared locations without running attacks."""
     tgt_clean_wrong, tgt_per_loc, tgt_fp = read_target(args.target_tag, config.RESULTS_ROOT)
     n = tgt_fp["n_images"]
-    sources, locations, unchecked = {}, None, set()
+    sources, locations, unchecked, transfers, reduced = {}, None, set(), set(), False
     for tag in [t.strip() for t in args.combine.split(",") if t.strip()]:
         clean, per_loc, fp = read_target(tag, config.RESULTS_ROOT)
         check_comparable(fp, tgt_fp)
@@ -348,6 +382,14 @@ def combine(args) -> None:
             raise SystemExit(f"{tag} swept {len(missing)} locations the target did not, "
                              f"starting {missing[:4]}")
         name = fp.get("source", tag)
+        if name in sources:
+            raise SystemExit(f"two runs record source {name!r}; the second would replace the "
+                             f"first rather than join the union. Combine them separately.")
+        if is_transfer(fp, tgt_fp):
+            transfers.add(name)
+        else:
+            print(f"  NOTE  {tag} is not a transfer against this target and is left out of "
+                  f"the black-box row")
         sources[name] = with_clean(per_loc, clean)
         here = sorted(per_loc)
         if locations is None:
@@ -358,16 +400,23 @@ def combine(args) -> None:
                   f"{len(locations)} for the sources before it; the suite is reported "
                   f"over the {len(shared)} they share")
             locations = shared
+            reduced = True
     if not sources:
         raise SystemExit("--combine needs at least one tag")
+    if not locations:
+        raise SystemExit("the supplied runs have no shared locations")
 
+    # Check every recorded self location before restricting the suite to its intersection.
+    self_replay = (check_self_replay(sorted(sources["self"]), sources["self"],
+                                   with_clean(tgt_per_loc, tgt_clean_wrong))
+                   if "self" in sources else None)
+    self_locations = len(sources.get("self", {}))
     sources = {k: {l: v[l] for l in locations} for k, v in sources.items()}
     tgt = with_clean({l: tgt_per_loc[l] for l in locations}, tgt_clean_wrong)
-    summary = summarise(n, locations, sources, tgt, set())
-    self_replay = (check_self_replay(locations, sources["self"], tgt)
-                   if list(sources) == ["self"] else None)
+    summary = summarise(n, locations, sources, tgt, set(), transfers=transfers)
     if self_replay is not None:
         summary["self_replay_disagreements"] = self_replay
+        summary["self_replay_n_locations"] = self_locations
     print(f"suite over {n} images and {len(locations)} locations, "
           f"target {args.target_tag}")
     if unchecked:
@@ -379,8 +428,26 @@ def combine(args) -> None:
         results.save(args.out, dict(
             purpose="transfer suite: every source against one target, and their union",
             target_tag=args.target_tag, sources=sorted(sources),
-            combined_from=args.combine, **summary),
+            combined_from=args.combine,
+            unverified_target_settings=sorted(unchecked),
+            locations_reduced_to_intersection=reduced,
+            partial_locations=set(locations) != set(tgt_per_loc),
+            locations=[list(l) for l in locations], **summary),
             n_eval_images=n, attack_steps=tgt_fp.get("steps"))
+    if self_replay:
+        raise SystemExit(1)
+
+
+def is_transfer(fp: dict, tgt_fp: dict) -> bool:
+    """A recorded run is a transfer only if flagged so and its surrogate is not the target."""
+    if not fp.get("transferred"):
+        return False
+    if fp.get("source_window") == 0 or tgt_fp.get("window") == 0:
+        return fp.get("source_window") != tgt_fp.get("window")
+    return ((fp.get("source_window"), fp.get("source_window_rule"),
+             fp.get("source_freeze_mask_after"))
+            != (tgt_fp.get("window"), tgt_fp.get("window_rule"),
+                tgt_fp.get("freeze_mask_after")))
 
 
 def with_clean(per_loc: dict, clean: set) -> dict:
@@ -388,7 +455,7 @@ def with_clean(per_loc: dict, clean: set) -> dict:
     return {k: v | clean for k, v in per_loc.items()}
 
 
-def summarise(n, locations, sources: dict, tgt_per_loc, tgt_clean_wrong):
+def summarise(n, locations, sources: dict, tgt_per_loc, tgt_clean_wrong, transfers=()):
     """Report source-only, pairwise and full-suite accuracy from clean-inclusive failure sets."""
     tgt = {l: tgt_per_loc[l] for l in locations}
     tgt_u = set().union(*tgt.values())
@@ -414,6 +481,12 @@ def summarise(n, locations, sources: dict, tgt_per_loc, tgt_clean_wrong):
         suite = {l: suite[l] | per_loc[l] for l in locations}
 
     out["suite_union"] = agg(suite)
+    # The black-box reading: transfers only, with self, adaptive and target sweeps excluded.
+    moved = [p for name, p in sources.items() if name in transfers]
+    out["transfer_sources"] = sorted(name for name in sources if name in transfers)
+    if moved:
+        out["transfer_only_union"] = agg(
+            {l: set().union(*(p[l] for p in moved)) for l in locations})
     # Compare with sources alone; the full suite already contains every target failure.
     sources_u = set().union(*(set().union(*p.values()) for p in sources.values())) \
         if sources else set()
@@ -440,10 +513,14 @@ def report(target_tag, s, self_replay=None) -> None:
     t = s["target_own_attack"]
     print(f"  {target_tag + ', own attack':<32}{t[w]:11.2f}%{t[m]:15.2f}%")
     for name, d in s["by_source"].items():
-        label = ("adaptive: " if name in AUX_SOURCES else "transfer from ") + name
+        label = ("transfer from " if name in s.get("transfer_sources", ())
+                 else "adaptive: " if name in AUX_SOURCES else "white-box: ") + name
         print(f"  {label:<32}{d['alone'][w]:11.2f}%{d['alone'][m]:15.2f}%")
         print(f"  {'  with the target attack':<32}{d['union_with_target'][w]:11.2f}%"
               f"{d['union_with_target'][m]:15.2f}%")
+    if "transfer_only_union" in s:
+        b = s["transfer_only_union"]
+        print(f"  {'BLACK BOX, transferred only':<32}{b[w]:11.2f}%{b[m]:15.2f}%")
     u = s["suite_union"]
     print(f"  {'SUITE UNION, every attack':<32}{u[w]:11.2f}%{u[m]:15.2f}%")
 
@@ -458,10 +535,11 @@ def report(target_tag, s, self_replay=None) -> None:
                         for l in d["locations_where_this_source_found_more"]})
 
     if self_replay is not None:
+        checked = s.get("self_replay_n_locations", s["n_locations"])
         if self_replay:
             first = self_replay[0]
             print(f"\nSELF-CONTROL FAILED: the replay disagrees with the record at "
-                  f"{len(self_replay)} of {s['n_locations']} locations, first "
+                  f"{len(self_replay)} of {checked} locations, first "
                   f"{first['location']} (+{len(first['only_in_replay'])} images the "
                   f"replay broke and the record did not, "
                   f"-{len(first['only_in_record'])} the other way).")
@@ -470,7 +548,7 @@ def report(target_tag, s, self_replay=None) -> None:
                   "other sources until this is understood.")
         else:
             print(f"\nSelf-control passed: the replay's failure set is identical to the "
-                  f"record at all {s['n_locations']} locations, image for image.")
+                  f"record at all {checked} locations, image for image.")
         return
 
     kind = ("the adaptive attack" if set(s["by_source"]) <= set(AUX_SOURCES)

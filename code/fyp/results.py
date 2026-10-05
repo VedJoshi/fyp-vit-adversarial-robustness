@@ -29,7 +29,7 @@ def _git_dirty() -> bool | None:
             ["git", "status", "--porcelain"],
             cwd=config.VAULT_ROOT, capture_output=True, text=True, timeout=5,
         )
-        return bool(out.stdout.strip())
+        return bool(out.stdout.strip()) if out.returncode == 0 else None
     except Exception:
         return None
 
