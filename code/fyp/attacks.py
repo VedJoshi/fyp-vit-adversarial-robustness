@@ -214,6 +214,7 @@ def patch_autopgd(
     schedule: str = "counter",
     aux_loss: Callable[[torch.Tensor], torch.Tensor] | None = None,
     aux_weight: float = 0.0,
+    accept: Callable[[torch.Tensor], torch.Tensor] | None = None,
 ) -> torch.Tensor:
     """AutoPGD restricted to a patch. RSA's evaluation attack.
 
@@ -269,6 +270,9 @@ def patch_autopgd(
     `aux_loss` takes the adversarial image and returns a per-example tensor added to
     the objective; see `patch_fool` for why summing such a term in without per-layer
     gradient surgery weakens the attack.
+
+    `accept` takes the adversarial image and returns a per-example bool; a
+    misclassifying iterate counts as found only where it is True.
 
     Returns, per example, the point that misclassified if the attack found one, and
     otherwise the highest-loss point seen. The reference returns its initialisation
@@ -347,6 +351,8 @@ def patch_autopgd(
 
         x_best, grad_best, loss_best = adv.clone(), grad.clone(), per.clone()
         flipped = logits.argmax(1) != y
+        if accept is not None:
+            flipped &= accept(adv)
         x_flip = adv.clone()
 
         adv_old = adv.clone()
@@ -370,6 +376,8 @@ def patch_autopgd(
             loss_steps[i] = per
 
             now_wrong = logits.argmax(1) != y
+            if accept is not None:
+                now_wrong &= accept(adv)
             x_flip[now_wrong] = adv[now_wrong]
             flipped |= now_wrong
 
