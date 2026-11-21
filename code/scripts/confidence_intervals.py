@@ -5,9 +5,9 @@
 Every figure is a count of images out of n, read from its saved record. The intervals cover
 image sampling only; robust accuracies remain upper bounds on attack strength.
 
-Paired comparisons use McNemar's exact test. The records keep totals, not always per-image
-outcomes, so the p-value is the largest one consistent with the two totals on the same images:
-the most discordant pairs the totals allow. The true p-value is no larger.
+Paired comparisons use McNemar's exact test. Where both records list which images were correct,
+p is exact. Otherwise it is the largest p consistent with the two totals on the same images, so
+only a small bound shows a difference; a large bound shows nothing.
 """
 import json
 import math
@@ -32,12 +32,16 @@ def binom_cdf(k, m, p=0.5):
     return sum(math.comb(m, i) * p ** i * (1 - p) ** (m - i) for i in range(k + 1))
 
 
+def mcnemar_exact(b, c):
+    """Exact two-sided McNemar p from the two discordant counts."""
+    return min(1.0, 2 * binom_cdf(min(b, c), b + c)) if b + c else 1.0
+
+
 def mcnemar_bound(k1, k2, n):
     """Largest exact two-sided McNemar p over pairings of k1 and k2 successes in n."""
     hi, lo = max(k1, k2), min(k1, k2)
     c = min(lo, n - hi)            # p grows with c at fixed b - c, so take the most c allows
-    b = c + hi - lo
-    return min(1.0, 2 * binom_cdf(c, b + c)) if b + c else 1.0
+    return mcnemar_exact(c + hi - lo, c)
 
 
 def get(path, *keys):
@@ -55,6 +59,9 @@ def count(pct, n):
 
 def union(*lists):
     return len(set().union(*map(set, lists)))
+
+
+CORRECT: dict[str, set[int]] = {}       # per-image correct sets, where a record keeps them
 
 
 def figures():
@@ -92,6 +99,8 @@ def figures():
 
     cert = get("probe_certify.json")
     s = cert["sets"]["4,2/attn"]
+    CORRECT["cert_clean"] = set(s["defended_clean_correct"])
+    CORRECT["plain_clean"] = set(cert["undefended_clean_correct"])
     out += [("cert", "Provable defence, guaranteed correct (36 blocks)", len(s["certified"]), 512, P),
             ("cert_clean", "Provable defence, no attack", len(s["defended_clean_correct"]), 512, P),
             ("plain_clean", "Plain model, no attack", len(cert["undefended_clean_correct"]), 512, E)]
@@ -119,6 +128,7 @@ def self_check():
     assert wilson(0, 512)[0] == 0 and abs(wilson(0, 512)[1] - 0.00745) < 1e-4
     assert abs(mcnemar_bound(5, 0, 10) - 0.0625) < 1e-12          # b=5, c=0
     assert mcnemar_bound(3, 3, 10) == 1.0
+    assert abs(mcnemar_exact(10, 2) - 0.03857421875) < 1e-12
 
 
 def main():
@@ -133,13 +143,18 @@ def main():
         print(f"| {label} | {k}/{n} | {100 * k / n:.2f} | {100 * lo:.2f} to {100 * hi:.2f} | {st} |")
 
     tests = []
-    print("\n| Paired comparison (same images) | Counts | McNemar p, at most |\n|---|---|---|")
+    print("\n| Paired comparison (same images) | Counts | McNemar p |\n|---|---|---|")
     for a, b in PAIRS:
         (la, ka, na, _), (lb, kb, nb, _) = figs[a], figs[b]
         assert na == nb
-        p = mcnemar_bound(ka, kb, na)
-        tests.append(dict(a=a, b=b, k=[ka, kb], n=na, mcnemar_p_max=p))
-        print(f"| {la} vs {lb} | {ka} vs {kb} of {na} | {p:.1e} |")
+        extra = {}
+        if a in CORRECT and b in CORRECT:
+            extra = dict(only_a=len(CORRECT[a] - CORRECT[b]), only_b=len(CORRECT[b] - CORRECT[a]))
+            p, kind = mcnemar_exact(extra["only_a"], extra["only_b"]), "exact"
+        else:
+            p, kind = mcnemar_bound(ka, kb, na), "at most"
+        tests.append(dict(a=a, b=b, k=[ka, kb], n=na, mcnemar_p=p, p_kind=kind, **extra))
+        print(f"| {la} vs {lb} | {ka} vs {kb} of {na} | {kind} {p:.1e} |")
     for key, bar, side in BARS:
         label, k, n, _ = figs[key]
         p = binom_cdf(k, n, bar / 100)                                    # one-sided, below

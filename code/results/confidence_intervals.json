@@ -348,7 +348,8 @@
     0
    ],
    "n": 512,
-   "mcnemar_p_max": 1.6242827758820155e-114
+   "mcnemar_p": 1.6242827758820155e-114,
+   "p_kind": "at most"
   },
   {
    "a": "oracle",
@@ -358,7 +359,8 @@
     0
    ],
    "n": 512,
-   "mcnemar_p_max": 7.931068241611404e-118
+   "mcnemar_p": 7.931068241611404e-118,
+   "p_kind": "at most"
   },
   {
    "a": "cf_usual",
@@ -368,7 +370,8 @@
     86
    ],
    "n": 512,
-   "mcnemar_p_max": 1.3533326410989326e-42
+   "mcnemar_p": 1.3533326410989326e-42,
+   "p_kind": "at most"
   },
   {
    "a": "transfer_cf",
@@ -378,7 +381,8 @@
     1
    ],
    "n": 512,
-   "mcnemar_p_max": 6.202197988625861e-121
+   "mcnemar_p": 6.202197988625861e-121,
+   "p_kind": "at most"
   },
   {
    "a": "finder",
@@ -388,7 +392,8 @@
     5
    ],
    "n": 128,
-   "mcnemar_p_max": 2.4299079086631536e-06
+   "mcnemar_p": 2.4299079086631536e-06,
+   "p_kind": "at most"
   },
   {
    "a": "cert_clean",
@@ -398,7 +403,10 @@
     476
    ],
    "n": 512,
-   "mcnemar_p_max": 0.4340422553454787
+   "mcnemar_p": 0.03857421875,
+   "p_kind": "exact",
+   "only_a": 2,
+   "only_b": 10
   },
   {
    "a": "knnfar1",
