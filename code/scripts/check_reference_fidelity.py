@@ -32,6 +32,7 @@ Run it after any change to `rsa.RSAAttention` or `metrics.rsa_token_scores`. It 
 no model weights and no dataset, so it runs anywhere in a couple of seconds.
 """
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import torch
@@ -289,6 +290,83 @@ try:
           f"disagree across 4 stub blocks")
 except AssertionError as exc:
     check("verify passes", False, str(exc))
+
+print("\ngradient against central finite differences, float64")
+print("  independent of both implementations: which backward is the derivative of the forward")
+
+
+def fd_rel_err(f, x, g, n_dirs=8, eps=1e-6):
+    """Worst relative gap between <g, u> and (f(x+eps u) - f(x-eps u)) / 2 eps."""
+    gen = torch.Generator().manual_seed(1)
+    worst = 0.0
+    for _ in range(n_dirs):
+        u = torch.randn(x.shape, generator=gen, dtype=x.dtype)
+        with torch.no_grad():
+            fd = (f(x + eps * u) - f(x - eps * u)) / (2 * eps)
+        worst = max(worst, abs((g * u).sum().item() - fd.item()) / max(abs(fd.item()), 1e-12))
+    return worst
+
+
+# Masking op alone, the selected tokens held fixed as the forward holds them (no_grad).
+for size in (10, 20, 30, 40, 50):
+    v0 = torch.randn(B, H, CTX, D, dtype=torch.float64)
+    gout = torch.randn(B, H, CTX, D, dtype=torch.float64)
+    attn_w = torch.rand(B, H, CTX, CTX, dtype=torch.float64)
+    mask = rsa.RSAAttention(_StubAttn(), rsa.RSAConfig.for_patch(size, window_rule="released")
+                            ).select(v0.float())
+
+    def op(v, mode):
+        mu = v[:, :, 1:, :].mean(dim=2, keepdim=True)
+        if mode == "released":
+            mu = rsa._ScaleGrad.apply(mu, float(config.N_TOKENS))
+        return (torch.where(mask[:, None, :, None], mu.expand_as(v), v) * gout).sum()
+
+    def literal(v):
+        return (reference_trim(v, attn_w, size)[0] * gout).sum()
+
+    def mean_path(v):
+        mu = v[:, :, 1:, :].mean(dim=2, keepdim=True)
+        return (torch.where(mask[:, None, :, None], mu.expand_as(v), v.detach()) * gout).sum()
+
+    errs, grads = {}, {}
+    for name, f in (("intended", lambda v: op(v, "intended")),
+                    ("released", lambda v: op(v, "released")),
+                    ("literal scatter", literal),
+                    ("mean path", mean_path)):
+        v = v0.clone().requires_grad_(True)
+        (grads[name],) = torch.autograd.grad(f(v), v)
+        errs[name] = fd_rel_err(f, v0, grads[name])
+    check(f"{size}px op, intended matches finite differences", errs["intended"] < 1e-6,
+          f"rel {errs['intended']:.1e}")
+    check(f"{size}px op, released and literal scatter do not",
+          errs["released"] > 1e-2 and errs["literal scatter"] > 1e-2,
+          f"rel {errs['released']:.1e} / {errs['literal scatter']:.1e}")
+    # Literal = true gradient + 196 extra copies of the mean-path gradient, i.e. that path x197.
+    expected = grads["intended"] + (config.N_TOKENS - 1) * grads["mean path"]
+    gap = ((grads["literal scatter"] - expected).abs().max()
+           / expected.abs().max()).item()
+    check(f"{size}px op, literal scatter == true gradient with mean path x197", gap < 1e-10,
+          f"rel {gap:.1e}")
+
+# End to end: input gradient of a 4-block stub ViT with RSA installed in every block.
+net = _StubViT().double().eval()
+x0 = torch.randn(B, CTX, H * D, dtype=torch.float64)
+cfg = rsa.RSAConfig.released(20)
+for mode in rsa.BACKWARDS:
+    with rsa.enable(net, replace(cfg, backward=mode)) as handle:
+        def f(x):
+            return net(x)[:, 0].sum()
+        f(x0)
+        m0 = {i: m.clone() for i, m in handle.masks().items()}
+        x = x0.clone().requires_grad_(True)
+        (g,) = torch.autograd.grad(f(x), x)
+        err = fd_rel_err(f, x0, g)
+        f(x0 + 1e-6 * torch.ones_like(x0))
+        same_sel = all(torch.equal(m0[i], m) for i, m in handle.masks().items())
+    ok = (err < 1e-6) if mode == "intended" else (err > 1e-2)
+    check(f"end to end, backward='{mode}' {'matches' if mode == 'intended' else 'misses'} "
+          f"finite differences", ok and same_sel,
+          f"rel {err:.1e}{'' if same_sel else ', selection moved under eps'}")
 
 print()
 if failures:
