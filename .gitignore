@@ -44,6 +44,10 @@ code/results/gate_a_*.json
 # The two sides of the black-box comparison.
 !code/results/gate_a_transfer_suite_arm5_blackbox.json
 !code/results/gate_a_transfer_suite_ref.json
+# Read by scripts/confidence_intervals.py.
+!code/results/gate_a_orcfull_oracle_window.json
+!code/results/gate_a_diag_centred_frz0.json
+!code/results/gate_a_attack_suite.json
 code/results/table2_by_rule.json
 code/results/pilot20full_analysis.json
 code/results/pilot20fullb_analysis.json

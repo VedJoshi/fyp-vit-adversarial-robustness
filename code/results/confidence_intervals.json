@@ -1,0 +1,412 @@
+{
+ "purpose": "95% Wilson intervals and paired tests for reported figures",
+ "z": 1.959963984540054,
+ "figures": [
+  {
+   "key": "released_all",
+   "label": "RSA, all released settings",
+   "k": 382,
+   "n": 512,
+   "pct": 74.609375,
+   "ci": [
+    70.66566039054261,
+    78.18655877309675
+   ],
+   "status": "established"
+  },
+  {
+   "key": "released_grad",
+   "label": "RSA, released gradient",
+   "k": 379,
+   "n": 512,
+   "pct": 74.0234375,
+   "ci": [
+    70.05618428507421,
+    77.63288680324041
+   ],
+   "status": "established"
+  },
+  {
+   "key": "correct_grad",
+   "label": "RSA, correct gradient",
+   "k": 0,
+   "n": 512,
+   "pct": 0.0,
+   "ci": [
+    0.0,
+    0.7446975722882738
+   ],
+   "status": "established"
+  },
+  {
+   "key": "oracle",
+   "label": "Oracle: replacement at the true location",
+   "k": 390,
+   "n": 512,
+   "pct": 76.171875,
+   "ci": [
+    72.2953309910823,
+    79.65861637342306
+   ],
+   "status": "established"
+  },
+  {
+   "key": "cf_usual",
+   "label": "Centred-Frozen RSA, usual attack",
+   "k": 368,
+   "n": 512,
+   "pct": 71.875,
+   "ci": [
+    67.82873773691931,
+    75.59545707520456
+   ],
+   "status": "established"
+  },
+  {
+   "key": "cf_selection",
+   "label": "Centred-Frozen RSA, selection-aware attack",
+   "k": 87,
+   "n": 512,
+   "pct": 16.9921875,
+   "ci": [
+    13.987724473920466,
+    20.488267282785465
+   ],
+   "status": "established"
+  },
+  {
+   "key": "cf_all",
+   "label": "Centred-Frozen RSA, all attacks combined",
+   "k": 86,
+   "n": 512,
+   "pct": 16.796875,
+   "ci": [
+    13.808604155414608,
+    20.279671576183077
+   ],
+   "status": "established"
+  },
+  {
+   "key": "transfer_cf",
+   "label": "Centred-Frozen RSA, transferred patches only",
+   "k": 408,
+   "n": 512,
+   "pct": 79.6875,
+   "ci": [
+    75.98748962512072,
+    82.94534619133312
+   ],
+   "status": "established"
+  },
+  {
+   "key": "transfer_ref",
+   "label": "Reference, transferred patches only",
+   "k": 1,
+   "n": 512,
+   "pct": 0.1953125,
+   "ci": [
+    0.03448577615433748,
+    1.0979278212421852
+   ],
+   "status": "established"
+  },
+  {
+   "key": "knnfar1",
+   "label": "Neighbour-distance rule (dev)",
+   "k": 26,
+   "n": 128,
+   "pct": 20.3125,
+   "ci": [
+    14.255738193592272,
+    28.099268585147293
+   ],
+   "status": "established"
+  },
+  {
+   "key": "finder",
+   "label": "Pixel finder (dev)",
+   "k": 34,
+   "n": 128,
+   "pct": 26.5625,
+   "ci": [
+    19.675501016357284,
+    34.81529380896342
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "finder_cf",
+   "label": "Centred-Frozen RSA, finder comparison (dev)",
+   "k": 5,
+   "n": 128,
+   "pct": 3.90625,
+   "ci": [
+    1.6798610797803704,
+    8.818702076683687
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "cert",
+   "label": "Provable defence, guaranteed correct (36 blocks)",
+   "k": 390,
+   "n": 512,
+   "pct": 76.171875,
+   "ci": [
+    72.2953309910823,
+    79.65861637342306
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "cert_clean",
+   "label": "Provable defence, no attack",
+   "k": 468,
+   "n": 512,
+   "pct": 91.40625,
+   "ci": [
+    88.65969291864808,
+    93.5361044043007
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "plain_clean",
+   "label": "Plain model, no attack",
+   "k": 476,
+   "n": 512,
+   "pct": 92.96875,
+   "ci": [
+    90.41932796740075,
+    94.87819755641401
+   ],
+   "status": "established"
+  },
+  {
+   "key": "camo_none",
+   "label": "Camouflage (dev): broken, no cap",
+   "k": 111,
+   "n": 128,
+   "pct": 86.71875,
+   "ci": [
+    79.75798330550461,
+    91.53977146815961
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_anomaly_1.0",
+   "label": "Camouflage (dev): broken, anomaly cap q=1.0",
+   "k": 65,
+   "n": 128,
+   "pct": 50.78125,
+   "ci": [
+    42.224722925478495,
+    59.29225058034415
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_anomaly_0.9",
+   "label": "Camouflage (dev): broken, anomaly cap q=0.9",
+   "k": 34,
+   "n": 128,
+   "pct": 26.5625,
+   "ci": [
+    19.675501016357284,
+    34.81529380896342
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_anomaly_0.75",
+   "label": "Camouflage (dev): broken, anomaly cap q=0.75",
+   "k": 15,
+   "n": 128,
+   "pct": 11.71875,
+   "ci": [
+    7.231682349355734,
+    18.436615865334755
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_anomaly_0.5",
+   "label": "Camouflage (dev): broken, anomaly cap q=0.5",
+   "k": 0,
+   "n": 128,
+   "pct": 0.0,
+   "ci": [
+    0.0,
+    2.9136956273508416
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_knnfar1_1.0",
+   "label": "Camouflage (dev): broken, knnfar1 cap q=1.0",
+   "k": 72,
+   "n": 128,
+   "pct": 56.25,
+   "ci": [
+    47.59810117363419,
+    64.53768687294696
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_knnfar1_0.9",
+   "label": "Camouflage (dev): broken, knnfar1 cap q=0.9",
+   "k": 46,
+   "n": 128,
+   "pct": 35.9375,
+   "ci": [
+    28.146730575525858,
+    44.54774631966657
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_knnfar1_0.75",
+   "label": "Camouflage (dev): broken, knnfar1 cap q=0.75",
+   "k": 25,
+   "n": 128,
+   "pct": 19.53125,
+   "ci": [
+    13.59396128283779,
+    27.244071990079128
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_knnfar1_0.5",
+   "label": "Camouflage (dev): broken, knnfar1 cap q=0.5",
+   "k": 7,
+   "n": 128,
+   "pct": 5.46875,
+   "ci": [
+    2.6740201381346353,
+    10.858490029974707
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_tv_1.0",
+   "label": "Camouflage (dev): broken, tv cap q=1.0",
+   "k": 39,
+   "n": 128,
+   "pct": 30.46875,
+   "ci": [
+    23.16056151523922,
+    38.91510083919471
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_tv_0.9",
+   "label": "Camouflage (dev): broken, tv cap q=0.9",
+   "k": 7,
+   "n": 128,
+   "pct": 5.46875,
+   "ci": [
+    2.6740201381346353,
+    10.858490029974707
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_tv_0.75",
+   "label": "Camouflage (dev): broken, tv cap q=0.75",
+   "k": 1,
+   "n": 128,
+   "pct": 0.78125,
+   "ci": [
+    0.13804318928742412,
+    4.292625943886061
+   ],
+   "status": "preliminary"
+  },
+  {
+   "key": "camo_tv_0.5",
+   "label": "Camouflage (dev): broken, tv cap q=0.5",
+   "k": 0,
+   "n": 128,
+   "pct": 0.0,
+   "ci": [
+    0.0,
+    2.9136956273508416
+   ],
+   "status": "preliminary"
+  }
+ ],
+ "tests": [
+  {
+   "a": "released_grad",
+   "b": "correct_grad",
+   "k": [
+    379,
+    0
+   ],
+   "n": 512,
+   "mcnemar_p_max": 1.6242827758820155e-114
+  },
+  {
+   "a": "oracle",
+   "b": "correct_grad",
+   "k": [
+    390,
+    0
+   ],
+   "n": 512,
+   "mcnemar_p_max": 7.931068241611404e-118
+  },
+  {
+   "a": "cf_usual",
+   "b": "cf_all",
+   "k": [
+    368,
+    86
+   ],
+   "n": 512,
+   "mcnemar_p_max": 1.3533326410989326e-42
+  },
+  {
+   "a": "transfer_cf",
+   "b": "transfer_ref",
+   "k": [
+    408,
+    1
+   ],
+   "n": 512,
+   "mcnemar_p_max": 6.202197988625861e-121
+  },
+  {
+   "a": "finder",
+   "b": "finder_cf",
+   "k": [
+    34,
+    5
+   ],
+   "n": 128,
+   "mcnemar_p_max": 2.4299079086631536e-06
+  },
+  {
+   "a": "cert_clean",
+   "b": "plain_clean",
+   "k": [
+    468,
+    476
+   ],
+   "n": 512,
+   "mcnemar_p_max": 0.4340422553454787
+  },
+  {
+   "a": "knnfar1",
+   "bar_pct": 55.0,
+   "side": "below",
+   "k": 26,
+   "n": 128,
+   "binomial_p": 9.415390919784236e-16
+  }
+ ]
+}
