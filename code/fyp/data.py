@@ -4,6 +4,7 @@ Sorted wnids keep dataset labels aligned with the sliced model head.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 from collections.abc import Sequence
@@ -188,6 +189,26 @@ def dev_subset(ds: ImageFolder,
     pool = [i for i in range(len(ds)) if i not in held]
     n = min(n or len(pool), len(pool))
     return Subset(ds, sorted(random.Random(seed + 1).sample(pool, n)))
+
+
+TEST_SET = config.DATA_ROOT / "test_set.json"
+
+
+def index_digest(indices: Sequence[int]) -> str:
+    return hashlib.sha256(",".join(map(str, indices)).encode()).hexdigest()
+
+
+def test_subset(ds: ImageFolder, path: Path = TEST_SET) -> Subset:
+    """Load the sealed held-out test set; refuse it if the hash or file names differ."""
+    rec = json.loads(Path(path).read_text(encoding="utf-8"))
+    idx = rec["indices"]
+    if index_digest(idx) != rec["sha256"] or len(ds) != rec["dataset_size"]:
+        raise ValueError(f"{path} does not match its hash or this dataset's size")
+    root = Path(ds.root)
+    names = [Path(ds.samples[i][0]).relative_to(root).as_posix() for i in idx]
+    if names != rec["files"]:
+        raise ValueError(f"{path}: indices name different files in {root}")
+    return Subset(ds, idx)
 
 
 def draw_provenance(ds: ImageFolder, seed: int = config.SEED) -> dict:

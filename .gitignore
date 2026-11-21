@@ -29,6 +29,7 @@
 # git does not descend into it, so the negation below would never match.
 code/data/*
 !code/data/imagenet100_wnids_*.json
+!code/data/test_set.json
 
 # Run records are tracked; figures are not.
 code/results/*
