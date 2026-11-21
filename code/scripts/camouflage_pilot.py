@@ -1,8 +1,9 @@
-"""Probe: attack success on the undefended model when the patch must look ordinary.
+"""E1: attack success on the undefended model when the patch must look ordinary.
 
 The patch tokens' selector score is capped at a quantile of the same image's
 other tokens, so a patch that meets the cap ranks below that share of natural
-tokens. Development images only.
+tokens. One run is one stage and one start; camouflage_summary.py unions them.
+Protocol: 02_direction/PROTOCOL_DRAFT_2026-11-21_camouflage.md.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fyp import attacks, config, data, hooks, metrics, models, results  # noqa: E402
-from finder_attack import finder_scores  # noqa: E402
+from finder_attack import SEED_STRIDE, finder_scores, smooth_init  # noqa: E402
 from gate_a import paired_seed  # noqa: E402
 
 SELECTORS = ("anomaly", "knnfar1", "tv")
@@ -44,15 +45,23 @@ def patch_rank(s: torch.Tensor, patch: torch.Tensor) -> torch.Tensor:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--n-images", type=int, default=128)
+    ap.add_argument("--image-set", choices=("dev", "test"), default="dev",
+                    help="test is the sealed held-out set; final runs only")
+    ap.add_argument("--n-images", type=int, default=128, help="dev only")
+    ap.add_argument("--smooth-init", action="store_true",
+                    help="start from a blurred patch (init='given') instead of a uniform draw")
+    ap.add_argument("--seed-offset", type=int, default=0,
+                    help="shifts every initial patch draw; a new value is a fresh start")
     ap.add_argument("--size", type=int, default=20)
     ap.add_argument("--steps", type=int, default=100)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--selectors", default=" ".join(SELECTORS))
     ap.add_argument("--quantiles", default="1.0,0.9,0.75,0.5")
-    ap.add_argument("--weights", default="1,10",
+    ap.add_argument("--weights", default="1,10,100",
                     help="penalty weights on the cap violation, in clean score std units")
     ap.add_argument("--locations", default="60,60 100,20")
+    ap.add_argument("--save-patches", action="store_true",
+                    help="also write <out>_patches.pt for replay under a defence (E2/E3)")
     ap.add_argument("--out", default="probe_camouflage")
     args = ap.parse_args()
 
@@ -65,22 +74,27 @@ def main():
     print(config.describe())
     ds, _, class_indices = data.build_dataset()
     clf, _ = models.load_model(class_indices=class_indices, device=device)
-    sub = data.dev_subset(ds, args.n_images)
+    sub = data.test_subset(ds) if args.image_set == "test" else data.dev_subset(ds, args.n_images)
     xs, ys = zip(*[(x.to(device), y.to(device)) for x, y in data.make_loader(sub)])
     x_all, y_all = torch.cat(xs), torch.cat(ys)
     n, bs = len(x_all), args.batch_size
     clean_ok = torch.cat([attacks.accuracy(clf, x_all[i:i + bs], y_all[i:i + bs])
                           for i in range(0, n, bs)])
-    print(f"\n{n} development images, undefended clean accuracy "
-          f"{100 * clean_ok.float().mean():.2f}%, {args.steps} steps\n")
+    print(f"\n{n} {args.image_set} images, undefended clean accuracy "
+          f"{100 * clean_ok.float().mean():.2f}%, {args.steps} steps, "
+          f"{'smooth' if args.smooth_init else 'uniform'} start, seed offset {args.seed_offset}\n")
 
     def attack(top, left, aux=None, w=0.0, accept=None):
         out = []
         for s in range(0, n, bs):
-            config.seed_everything(paired_seed(args.size, top, left, s))
+            xb = x_all[s:s + bs]
+            config.seed_everything(paired_seed(args.size, top, left,
+                                               s + SEED_STRIDE * args.seed_offset))
+            start = smooth_init(xb, top, left, args.size) if args.smooth_init else xb
             out.append(attacks.patch_autopgd(
-                clf, x_all[s:s + bs], y_all[s:s + bs], top=top, left=left, size=args.size,
-                steps=args.steps, aux_loss=aux and (lambda adv, s=s: aux(adv, s)),
+                clf, start, y_all[s:s + bs], top=top, left=left, size=args.size,
+                steps=args.steps, init="given" if args.smooth_init else "uniform",
+                aux_loss=aux and (lambda adv, s=s: aux(adv, s)),
                 aux_weight=w, accept=accept and (lambda adv, s=s: accept(adv, s))))
         return torch.cat(out)
 
@@ -92,11 +106,21 @@ def main():
     payload = dict(purpose="attack success against the allowed selector score of the patch",
                    settings=dict(size=args.size, steps=args.steps, quantiles=quantiles,
                                  weights=weights, locations=[list(l) for l in locations],
-                                 draw=data.draw_provenance(ds)),
+                                 image_set=args.image_set, smooth_init=args.smooth_init,
+                                 seed_offset=args.seed_offset, draw=data.draw_provenance(ds),
+                                 test_sha256=data.index_digest(sub.indices)
+                                 if args.image_set == "test" else None),
                    index=list(sub.indices),
                    indexing="index[i] is the dataset index of position i",
                    clean_wrong=(~clean_ok).nonzero().flatten().tolist(),
                    unconstrained={}, capped={})
+    # Patch pixels for E2/E3 replay: key -> (positions, (k, 3, size, size)); capped keys
+    # keep only patches that meet the cap.
+    patches: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+
+    def keep(key, adv, sel, top, left):
+        idx = sel.nonzero().flatten()
+        patches[key] = (idx.cpu(), adv[idx, :, top:top + args.size, left:left + args.size].cpu())
 
     for top, left in locations:
         loc = f"{top},{left}"
@@ -107,6 +131,8 @@ def main():
         t0 = time.time()
         adv = attack(top, left)
         base = wrong(adv) & clean_ok
+        if args.save_patches:
+            keep(f"{loc}/none", adv, torch.ones_like(base), top, left)
         rec = {"wrong": base.nonzero().flatten().tolist(), "patch_rank": {}}
         line = f"({top:>3},{left:>3}) unconstrained  wrong {100 * base.float().mean():6.2f}%"
         for sel in args.selectors.split():
@@ -141,6 +167,8 @@ def main():
                     with torch.no_grad():
                         ok = torch.cat([viol(adv[i:i + bs], i) <= 0 for i in range(0, n, bs)])
                     hit = wrong(adv) & ok & clean_ok
+                    if args.save_patches:
+                        keep(f"{loc}/{sel}/{q}/{w}", adv, ok, top, left)
                     by_w[w] = hit.nonzero().flatten().tolist()
                     got |= hit
                 payload["capped"][f"{loc}/{sel}/{q}"] = {
@@ -148,6 +176,8 @@ def main():
                 print(f"    {sel:<8} cap at quantile {q:<5} success {100 * got.float().mean():6.2f}%  "
                       f"per weight {[len(v) for v in by_w.values()]}   {time.time() - t0:.0f}s")
                 results.save(args.out, payload, n_eval_images=n, attack_steps=args.steps)
+                if args.save_patches:
+                    torch.save(patches, config.RESULTS_ROOT / f"{args.out}_patches.pt")
 
 
 def self_check():
