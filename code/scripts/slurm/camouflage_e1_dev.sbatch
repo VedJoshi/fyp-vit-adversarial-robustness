@@ -1,6 +1,6 @@
 #!/bin/bash
 # E1 development run: stages 1-2 (100, 400 steps) x uniform/smooth start, 128 dev images.
-# sbatch --exclude=xgpe2,xgpe6,xgpd2 code/scripts/slurm/camouflage_e1_dev.sbatch
+# sbatch --exclude=xgpe2,xgpe6,xgpd2,xgpe4 code/scripts/slurm/camouflage_e1_dev.sbatch
 
 #SBATCH --job-name=fyp-e1dev
 #SBATCH --array=0-3
@@ -28,6 +28,8 @@ export FYP_IMAGENET100="$REPO/code/data/imagenet100"
 mkdir -p "$TMPDIR"
 test -d "$FYP_IMAGENET100/val" || { echo "ERROR: missing $FYP_IMAGENET100/val"; exit 1; }
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
+# A node whose driver torch cannot use would otherwise run the whole job on CPU.
+python -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 'ERROR: torch sees no CUDA device')"
 
 STEPS=(100 100 400 400)
 START=("" "--smooth-init" "" "--smooth-init")

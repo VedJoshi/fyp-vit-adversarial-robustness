@@ -22,9 +22,12 @@ def settle(n: int) -> int:
 
 def cells(rec: dict) -> dict[str, set[int]]:
     """Cell -> images broken in this run, unioned over its locations."""
-    out: dict[str, set[int]] = {"none": set()}
-    for r in rec["unconstrained"].values():
-        out["none"] |= set(r["wrong"])
+    out: dict[str, set[int]] = {}
+    for r in rec.get("unconstrained", {}).values():
+        out.setdefault("none", set()).update(r["wrong"])
+    for score, by_loc in rec.get("unconstrained_by_defence", {}).items():   # E2 records
+        for r in by_loc.values():
+            out.setdefault(f"none/{score}", set()).update(r["wrong"])
     for key, r in rec["capped"].items():
         _, sel, q = key.split("/")
         out.setdefault(f"{sel}/{q}", set()).update(r["success"])
